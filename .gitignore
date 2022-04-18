@@ -4,7 +4,7 @@ DST/ckpt
 DST/__pycache__/
 *.out
 *.json
-
+*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
