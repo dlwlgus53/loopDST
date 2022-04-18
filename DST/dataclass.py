@@ -24,7 +24,7 @@ class DSTMultiWozData:
 
             add_prefix: whether adding task-specifc prompt to drive the generation
 
-            add_special_decoder_token: whether add special decoder token for generation of each subtasks
+            add_special_decoder_token: whether add special decoder token for generation of each subtasks 
                     <sos_b>, <eos_b> for belief state tracking
                     <sos_a>, <eos_a> for dialogue action prediction
                     <sos_r>, <eos_r> for response generation
@@ -76,13 +76,17 @@ class DSTMultiWozData:
         import json
         if data_mode == 'train':
             train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json'
+            # path of labeled data
             with open(train_json_path) as f:
                 train_raw_data = json.load(f)
+            # read the labeled data
+            
+                
 
             self.train_data_ratio = train_data_ratio
             assert self.train_data_ratio > 0
             # few-shot learning
-            if self.train_data_ratio < 1.0:
+            if self.train_data_ratio < 1.0: # TODO save original list
                 print ('Few-shot training setup.')
                 few_shot_num = int(len(train_raw_data) * self.train_data_ratio) + 1
                 random.shuffle(train_raw_data)
@@ -91,7 +95,7 @@ class DSTMultiWozData:
                 print ('Number of training sessions is {}'.format(few_shot_num))
 
             print ('Tokenizing raw train data...')
-            train_data_id_list = self.tokenize_raw_data(train_raw_data)
+            train_data_id_list = self.tokenize_raw_data(train_raw_data) # give labled data list too
             self.train_data_list = self.flatten_data(train_data_id_list)
             # record training data
             self.train_id2session_dict = {}
@@ -171,7 +175,7 @@ class DSTMultiWozData:
                 res_token_id_list.append(one_id)
         return res_token_id_list
 
-    def tokenize_raw_data(self, raw_data_list):
+    def tokenize_raw_data(self, raw_data_list): # TODO also get labeld data list and answer
         data_num = len(raw_data_list)
         p = progressbar.ProgressBar(data_num)
         p.start()
@@ -179,12 +183,12 @@ class DSTMultiWozData:
         for idx in range(data_num):
             p.update(idx)
             one_sess_list = []
-            for turn in raw_data_list[idx]:
+            for turn in raw_data_list[idx]: # TODO : also should be labeled list
                 one_turn_dict = {}
                 for key in turn:
                     if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db']:
                         one_turn_dict[key] = turn[key]
-                    else:
+                    else: # TODO in case of original data, use same, if not, use labeld dataset file
                         # only tokenize ["user", "usdx", "resp", "bspn", "bsdx", "bspn_reform", "bsdx_reform"]
                         value_text = turn[key]
                         value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
@@ -265,7 +269,7 @@ class DSTMultiWozData:
                       e.g. '<sos_a> [restaurant] [request] food <eos_a>'
         '''
         data_list = []
-        for session in data:
+        for session in data: # session is dial
             one_dial_id = session[0]['dial_id']
             turn_num = len(session)
             previous_context = [] # previous context contains all previous user input and system response
@@ -277,6 +281,7 @@ class DSTMultiWozData:
                 curr_bspn = curr_turn['bspn']
 
                 # construct belief state data
+                # -900 menas get from last character - 900
                 bs_input = previous_context + curr_user_input
                 bs_input = self.bs_prefix_id + [self.sos_context_token_id] + bs_input[-900:] + [self.eos_context_token_id]
                 bs_output = curr_bspn
@@ -298,7 +303,7 @@ class DSTMultiWozData:
                 previous_context = previous_context + curr_user_input + curr_sys_resp
         return data_list
 
-    def get_batches(self, batch_size, mode):
+    def get_batches(self, batch_size, mode): # TODO get selected item.
         batch_list = []
         if mode == 'train':
             data_num = self.train_num
@@ -314,7 +319,7 @@ class DSTMultiWozData:
             raise Exception('Wrong Mode!!!')
 
         all_input_data_list, all_output_data_list = [], []
-        for item in all_data_list:
+        for item in all_data_list: # TODO in original or labeled data list
             one_input_data_list = []
             for key in ['bs_input']:
                 one_input_data_list.append(item[key])
