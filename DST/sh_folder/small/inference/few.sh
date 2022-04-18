@@ -47,4 +47,5 @@ CUDA_VISIBLE_DEVICES=2 python ../../../inference.py\
     --pretrained_path ../../../ckpt/small/few_training/\
     --output_save_path ../../../inference_result/small/few_training/\
     --number_of_gpu 1\
-    --batch_size_per_gpu 8
+    --batch_size_per_gpu 8a
+    
