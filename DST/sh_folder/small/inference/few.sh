@@ -11,7 +11,7 @@
 #### Select  GPU
 #SBATCH   --gres=gpu:1
 #SBTACH   --ntasks=1
-#SBATCH   --tasks-per-node=1
+#SBATCH   --tasks-per-node=4
 #SBATCH     --mail-user=jihyunlee@postech.ac.kr
 #SBATCH     --mail-type=ALL
 
