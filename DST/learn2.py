@@ -1,5 +1,5 @@
 import os
-import sys
+import sys, pdb
 import json
 import torch
 import random
@@ -10,6 +10,8 @@ import torch.nn as nn
 from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
+from inference_utlis import batch_generate
+
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 
 
@@ -64,10 +66,12 @@ def parse_config():
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument("--epoch_num", default=60, type=int, help="Total number of training epochs to perform.")
     parser.add_argument("--batch_size_per_gpu", type=int, default=4, help='Batch size for each gpu.')  
+    parser.add_argument("--eval_batch_size_per_gpu", type=int, default=8, help='Batch size for each gpu.')  
     parser.add_argument("--number_of_gpu", type=int, default=8, help="Number of available GPUs.")  
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2, help="gradient accumulation step.")
     parser.add_argument("--ckpt_save_path", type=str, help="directory to save the model parameters.")
     parser.add_argument("--seed", type=int, default=1, help="random seed")
+    parser.add_argument("--loop", type=int, default=1, help="loop")
     
     return parser.parse_args()
 
@@ -173,7 +177,7 @@ if __name__ == '__main__':
         raise Exception('Wrong Specify LR Mode!!!')
 
     from dataclass3 import DSTMultiWozData
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, args.loop, shuffle_mode=args.shuffle_mode, 
                           data_mode='train', train_data_ratio=args.train_data_ratio)
 
     print ('Start loading model...')
@@ -213,6 +217,29 @@ if __name__ == '__main__':
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
     for epoch in range(args.epoch_num):
+        ############ tagging ####################
+        
+        print ('Start tagging at epoch %d' % epoch)
+        model.eval()
+        with torch.no_grad():
+            tagging_batch_list = \
+            data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.eval_batch_size_per_gpu, eva_mode='tagging')
+            tagging_batch_num_per_epoch = len(tagging_batch_list)
+            p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
+            print ('Number of evaluation batches is %d' % tagging_batch_num_per_epoch)
+            p.start()
+            all_tagging_result = []
+            p_tagging_idx = 0
+            for p_tagging_idx in range(tagging_batch_num_per_epoch):
+                p.update(p_tagging_idx)
+                one_inference_batch = tagging_batch_list[p_tagging_idx]
+                tagging_batch_parse_dict, confidence = batch_generate(model, one_inference_batch, data, need_confidence=True)
+                pdb.set_trace()
+                for item in tagging_batch_parse_dict:
+                    all_tagging_result.append(item)
+            p.finish()
+            
+            
         model.train()
         # --- training --- #
         print ('-----------------------------------------')
@@ -258,16 +285,6 @@ if __name__ == '__main__':
         # **********************************************************************
         # --- evaluation --- #
 
-        if args.train_data_ratio <= 0.1:
-            if epoch < 5: # first train 10 epoches
-                continue
-        elif args.train_data_ratio == 0.2:
-            if epoch < 3: # first train 5 epoches
-                continue
-        else:
-            pass
-
-        from inference_utlis import batch_generate
         print ('Start evaluation at epoch %d' % epoch)
         model.eval()
         with torch.no_grad():

@@ -51,7 +51,7 @@ class T5Gen_Model(nn.Module):
         res_text = ' '.join(res_text_list).strip()
         return res_text
 
-    def batch_generate(self, src_input, src_mask, generate_mode, max_decode_len):
+    def batch_generate(self, src_input, src_mask, generate_mode, max_decode_len, need_confidence=False):
         '''
             This function deals with batch generation. In order to fully take advantage of batch inference,
             in each batch, we only generate one type of output. e.g. Given a batch of dialogue history, we 
@@ -71,16 +71,21 @@ class T5Gen_Model(nn.Module):
             start_token, end_token = '<pad>', '</s>'
             start_token_id, end_token_id = \
             self.tokenizer.convert_tokens_to_ids([start_token])[0], self.tokenizer.convert_tokens_to_ids([end_token])[0]
-
+        origin_outputs = self.model(input_ids=src_input, attention_mask=src_mask, decoder_input_ids=src_input)
+        max_logit = torch.max(origin_outputs.logits,2).values
         outputs = self.model.generate(input_ids = src_input, attention_mask = src_mask, decoder_start_token_id = start_token_id,
             pad_token_id = self.pad_token_id, eos_token_id = end_token_id, max_length = max_decode_len)
-
+        # get confidence in here
+        
         res_text_list = []
-        for predicted_ids in outputs:
+        for predicted_ids, logit in zip(outputs, max_logit):
             one_res_text = self.tokenized_decode(predicted_ids)
             #print (one_res_text)
             one_res_text = one_res_text.split(start_token)[-1].split(end_token)[0].strip()
-
+            
+            first_idx = (predicted_ids == 32112).nonzero(as_tuple=True)[0][0]
+            last_idx = (predicted_ids == 32100).nonzero(as_tuple=True)[0][0]
+            confidence = torch.mean(logit[first_idx+1:last_idx])
             final_res_list = []
             for token in one_res_text.split():
                 if token == '<_PAD_>':
@@ -90,8 +95,11 @@ class T5Gen_Model(nn.Module):
             one_res_text = ' '.join(final_res_list).strip()
             
             res_text_list.append(one_res_text)
-        return res_text_list
-
+        if need_confidence == True:
+            return res_text_list, confidence
+        else:
+            return res_text_list
+            
     def save_model(self, ckpt_save_path):
         if not os.path.exists(ckpt_save_path):
             os.mkdir(ckpt_save_path)
