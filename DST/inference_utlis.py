@@ -63,7 +63,6 @@ def batch_generate(model, one_inference_batch, data, need_confidence=False):
         bs_tensor = bs_tensor.cuda(device)
         bs_mask = bs_mask.cuda(device)
     
-    
     if need_confidence:
         batch_bs_text, confidence = model.batch_generate(bs_tensor, bs_mask, generate_mode='bs', max_decode_len=max_response_len, need_confidence=need_confidence) # TODO
     else:
@@ -72,7 +71,9 @@ def batch_generate(model, one_inference_batch, data, need_confidence=False):
     for idx in range(batch_size):
         one_bs_text = batch_bs_text[idx]
         res_batch_parse_dict[idx]['bspn_gen'] = one_bs_text
+        
+        
     if need_confidence:
         return res_batch_parse_dict, confidence
     else:
-        res_batch_parse_dict
+        return res_batch_parse_dict

@@ -86,14 +86,14 @@ class T5Gen_Model(nn.Module):
             one_res_text = one_res_text.split(start_token)[-1].split(end_token)[0].strip()
             
             try:
-                first_idx = (predicted_ids == 32112).nonzero(as_tuple=True)[0][0]
+                first_idx = (predicted_ids == 32112).nonzero(as_tuple=True)[0][0] 
             except:
                 first_idx = 0
             try:
-                last_idx = (predicted_ids == 32100).nonzero(as_tuple=True)[0][0]
+                last_idx = (predicted_ids == 32100).nonzero(as_tuple=True)[0][0] + 1
             except:
                 last_idx = len(predicted_ids)
-            confidence = torch.mean(logit[first_idx+1:last_idx]).item()
+            confidence = torch.mean(logit[first_idx:last_idx]).item()
             confidence_list.append(confidence)
             
             final_res_list = []
