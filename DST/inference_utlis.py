@@ -40,7 +40,7 @@ def erase_error(text):
     text = re.sub(r"\[value-", r"[value_", text)
     return text
 
-def batch_generate(model, one_inference_batch, data):
+def batch_generate(model, one_inference_batch, data, need_confidence=False):
     is_cuda = next(model.parameters()).is_cuda
     if is_cuda: 
         #device = next(model.parameters()).device
@@ -62,11 +62,17 @@ def batch_generate(model, one_inference_batch, data):
     if is_cuda:
         bs_tensor = bs_tensor.cuda(device)
         bs_mask = bs_mask.cuda(device)
-    batch_bs_text = model.batch_generate(bs_tensor, bs_mask, generate_mode='bs', max_decode_len=max_response_len) # TODO
     
-    # changed part
-    confidence = 1
+    
+    if need_confidence:
+        batch_bs_text, confidence = model.batch_generate(bs_tensor, bs_mask, generate_mode='bs', max_decode_len=max_response_len, need_confidence=need_confidence) # TODO
+    else:
+        batch_bs_text = model.batch_generate(bs_tensor, bs_mask, generate_mode='bs', max_decode_len=max_response_len, need_confidence=need_confidence) # TODO
+        
     for idx in range(batch_size):
         one_bs_text = batch_bs_text[idx]
         res_batch_parse_dict[idx]['bspn_gen'] = one_bs_text
-    return res_batch_parse_dict
+    if need_confidence:
+        return res_batch_parse_dict, confidence
+    else:
+        res_batch_parse_dict

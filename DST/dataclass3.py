@@ -122,14 +122,14 @@ class DSTMultiWozData:
         else:
             raise Exception('Wrong Data Mode!!!')
 
-        dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
+        dev_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json'
         with open(dev_json_path) as f:
             dev_raw_data = json.load(f)
         print ('Tokenizing raw dev data...')
         dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
+        test_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json'
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
         print ('Tokenizing raw test data...')
@@ -137,7 +137,7 @@ class DSTMultiWozData:
         self.test_data_list = self.flatten_data(test_data_id_list)
         
         
-        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' #TODO 
+        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' #TODO 
         with open(tagging_json_path) as f:
             tagging_raw_data = json.load(f)
         print ('Tokenizing raw tagging data...')
@@ -480,7 +480,7 @@ class DSTMultiWozData:
         for i, item in enumerate(data_list):
             if i%1000 == 0:
                 print(i/len(data_list))
-            dial_turn_idx = 'd' + item['dial_id'] + 't' + str(item['turn_num']) 
+            dial_turn_idx = '[d]' + item['dial_id'] + '[t]' + str(item['turn_num']) 
             if eva_mode == 'tagging' and dial_turn_idx in self.labeled_data.keys():
                 continue
             one_bs_input_id_list, one_parse_dict = self.parse_one_eva_instance(item)

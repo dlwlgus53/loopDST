@@ -11,6 +11,7 @@ from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
 from inference_utlis import batch_generate
+from queue import PriorityQueue
 
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 
@@ -218,27 +219,49 @@ if __name__ == '__main__':
     max_dev_score, max_dev_str = 0., ''
     for epoch in range(args.epoch_num):
         ############ tagging ####################
-        
-        print ('Start tagging at epoch %d' % epoch)
-        model.eval()
-        with torch.no_grad():
-            tagging_batch_list = \
-            data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.eval_batch_size_per_gpu, eva_mode='tagging')
-            tagging_batch_num_per_epoch = len(tagging_batch_list)
-            p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
-            print ('Number of evaluation batches is %d' % tagging_batch_num_per_epoch)
-            p.start()
-            all_tagging_result = []
-            p_tagging_idx = 0
-            for p_tagging_idx in range(tagging_batch_num_per_epoch):
-                p.update(p_tagging_idx)
-                one_inference_batch = tagging_batch_list[p_tagging_idx]
-                tagging_batch_parse_dict, confidence = batch_generate(model, one_inference_batch, data, need_confidence=True)
-                pdb.set_trace()
-                for item in tagging_batch_parse_dict:
-                    all_tagging_result.append(item)
-            p.finish()
+        if args.loop and epoch !=0:
+            confidence_que = PriorityQueue()
+            print ('Start tagging at epoch %d' % epoch)
+            model.eval()
+            with torch.no_grad():
+                tagging_batch_list = \
+                data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.eval_batch_size_per_gpu, eva_mode='tagging')
+                tagging_batch_num_per_epoch = len(tagging_batch_list)
+                p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
+                print ('Number of tagging batches is %d' % tagging_batch_num_per_epoch)
+                p.start()
+                all_tagging_result = []
+                p_tagging_idx = 0
+                for p_tagging_idx in range(tagging_batch_num_per_epoch):
+                    p.update(p_tagging_idx)
+                    one_inference_batch = tagging_batch_list[p_tagging_idx]
+                    tagging_batch_parse_dict, confidence_list = batch_generate(model, one_inference_batch, data, need_confidence=True)
+                    for item, confidence in zip(tagging_batch_parse_dict, confidence_list):
+                        all_tagging_result.append(item)
+                        dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
+                        confidence_que.put((-confidence, (dial_turn_key , item['bspn'])))
+                p.finish()
             
+            cnt =0
+
+            
+            try:
+                labeled_json_path = args.data_path_prefix + '/labeled.json'
+                with open(labeled_json_path) as f:
+                    labeled_data = json.load(f)
+            except:
+                labeled_data = {}
+                
+            while confidence_que.empty() != True:
+                cnt +=1
+                key, value = confidence_que.get()[1]
+                labeled_data[key] = value
+                if cnt>len(all_tagging_result)*0.3:
+                    break
+            with open(labeled_json_path, 'w') as outfile:
+                json.dump(labeled_data, outfile, indent=4)
+        
+        # --- tagging --- #
             
         model.train()
         # --- training --- #

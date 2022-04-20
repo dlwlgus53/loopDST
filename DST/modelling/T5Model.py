@@ -1,8 +1,9 @@
+import os
+import pdb
 import torch
 from torch import nn
 import torch.nn.functional as F
 from transformers import T5ForConditionalGeneration, T5Config
-import os
 
 class T5Gen_Model(nn.Module):
     def __init__(self, model_path, tokenizer, special_token_list, dropout, add_special_decoder_token, is_training):
@@ -78,14 +79,23 @@ class T5Gen_Model(nn.Module):
         # get confidence in here
         
         res_text_list = []
+        confidence_list = []
         for predicted_ids, logit in zip(outputs, max_logit):
             one_res_text = self.tokenized_decode(predicted_ids)
             #print (one_res_text)
             one_res_text = one_res_text.split(start_token)[-1].split(end_token)[0].strip()
             
-            first_idx = (predicted_ids == 32112).nonzero(as_tuple=True)[0][0]
-            last_idx = (predicted_ids == 32100).nonzero(as_tuple=True)[0][0]
-            confidence = torch.mean(logit[first_idx+1:last_idx])
+            try:
+                first_idx = (predicted_ids == 32112).nonzero(as_tuple=True)[0][0]
+            except:
+                first_idx = 0
+            try:
+                last_idx = (predicted_ids == 32100).nonzero(as_tuple=True)[0][0]
+            except:
+                last_idx = len(predicted_ids)
+            confidence = torch.mean(logit[first_idx+1:last_idx]).item()
+            confidence_list.append(confidence)
+            
             final_res_list = []
             for token in one_res_text.split():
                 if token == '<_PAD_>':
@@ -96,7 +106,7 @@ class T5Gen_Model(nn.Module):
             
             res_text_list.append(one_res_text)
         if need_confidence == True:
-            return res_text_list, confidence
+            return res_text_list, confidence_list
         else:
             return res_text_list
             
