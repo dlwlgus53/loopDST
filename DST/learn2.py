@@ -178,8 +178,8 @@ if __name__ == '__main__':
         raise Exception('Wrong Specify LR Mode!!!')
 
     from dataclass3 import DSTMultiWozData
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, args.loop, shuffle_mode=args.shuffle_mode, 
-                          data_mode='train', train_data_ratio=args.train_data_ratio)
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
+                          data_mode='train', train_data_ratio=args.train_data_ratio, isloop=args.loop)
 
     print ('Start loading model...')
     if args.model_name.startswith('facebook/bart'):
@@ -243,8 +243,6 @@ if __name__ == '__main__':
                 p.finish()
             
             cnt =0
-
-            
             try:
                 labeled_json_path = args.data_path_prefix + '/labeled.json'
                 with open(labeled_json_path) as f:
@@ -267,7 +265,12 @@ if __name__ == '__main__':
         # --- training --- #
         print ('-----------------------------------------')
         print ('Start training at epoch %d' % epoch)
-        train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
+        if epoch == 0:
+            train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
+        else:
+            if epoch == 1:
+                data.mode_change_to_train_loop()
+            train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
         train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
         p = progressbar.ProgressBar(train_batch_num_per_epoch)
         p.start()
@@ -307,7 +310,6 @@ if __name__ == '__main__':
         print ('++++++++++++++++++++++++++++++++++++++++++')
         # **********************************************************************
         # --- evaluation --- #
-
         print ('Start evaluation at epoch %d' % epoch)
         model.eval()
         with torch.no_grad():
