@@ -16,7 +16,7 @@ all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class DSTMultiWozData:
     def __init__(self, model_name, tokenizer, data_path_prefix, shuffle_mode='shuffle_session_level', 
-        data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, isloop = False):
+        data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, use_progress = True):
         '''
             model_name: t5-small or t5-base or t5-large
 
@@ -31,6 +31,7 @@ class DSTMultiWozData:
                     <sos_a>, <eos_a> for dialogue action prediction
                     <sos_r>, <eos_r> for response generation
         '''
+        self.use_progress = use_progress
         self.add_prefix = add_prefix
         assert self.add_prefix in [True, False]
         self.add_special_decoder_token = add_special_decoder_token
@@ -221,11 +222,14 @@ class DSTMultiWozData:
 
     def tokenize_raw_data(self, raw_data_list): # TODO also get labeld data list and answer
         data_num = len(raw_data_list)
-        p = progressbar.ProgressBar(data_num)
-        p.start()
+        if self.use_progress:
+            p = progressbar.ProgressBar(data_num)
+            p.start()
         all_session_list = []
         for idx in range(data_num):
-            p.update(idx)
+            if self.use_progress: p.update(idx)
+            else:
+                if idx%100 == 0: print(idx/data_num)
             one_sess_list = []
             for turn in raw_data_list[idx]: # TODO : also should be labeled list
                 one_turn_dict = {}
@@ -244,7 +248,7 @@ class DSTMultiWozData:
 
                 one_sess_list.append(one_turn_dict)
             all_session_list.append(one_sess_list)
-        p.finish()
+        if self.use_progress: p.finish()
         assert len(all_session_list) == len(raw_data_list)
         return all_session_list
 

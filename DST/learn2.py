@@ -73,6 +73,8 @@ def parse_config():
     parser.add_argument("--ckpt_save_path", type=str, help="directory to save the model parameters.")
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument("--loop", type=int, default=1, help="loop")
+    parser.add_argument("--use_progress", type=int, default=1, help="do progress")
+    
     
     return parser.parse_args()
 
@@ -179,7 +181,7 @@ if __name__ == '__main__':
 
     from dataclass3 import DSTMultiWozData
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
-                          data_mode='train', train_data_ratio=args.train_data_ratio, isloop=args.loop)
+                          data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress)
 
     print ('Start loading model...')
     if args.model_name.startswith('facebook/bart'):
@@ -219,7 +221,9 @@ if __name__ == '__main__':
     max_dev_score, max_dev_str = 0., ''
     for epoch in range(args.epoch_num):
         ############ tagging ####################
-        if args.loop and epoch !=0:
+        # if args.loop and epoch !=0:
+        if args.loop:
+            
             confidence_que = PriorityQueue()
             print ('Start tagging at epoch %d' % epoch)
             model.eval()
@@ -227,20 +231,22 @@ if __name__ == '__main__':
                 tagging_batch_list = \
                 data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.eval_batch_size_per_gpu, eva_mode='tagging')
                 tagging_batch_num_per_epoch = len(tagging_batch_list)
-                p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
+                if args.use_progress: p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
                 print ('Number of tagging batches is %d' % tagging_batch_num_per_epoch)
-                p.start()
+                if args.use_progress: p.start()
                 all_tagging_result = []
                 p_tagging_idx = 0
                 for p_tagging_idx in range(tagging_batch_num_per_epoch):
-                    p.update(p_tagging_idx)
+                    if args.use_progress: p.update(p_tagging_idx)
+                    else:
+                        if p_tagging_idx%100 == 0: print(p_tagging_idx/len(tagging_batch_num_per_epoch))
                     one_inference_batch = tagging_batch_list[p_tagging_idx]
                     tagging_batch_parse_dict, confidence_list = batch_generate(model, one_inference_batch, data, need_confidence=True)
                     for item, confidence in zip(tagging_batch_parse_dict, confidence_list):
                         all_tagging_result.append(item)
                         dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
                         confidence_que.put((-confidence, (dial_turn_key , item['bspn'])))
-                p.finish()
+                if args.use_progress: p.finish()
             
             cnt =0
             labeled_json_path = args.data_path_prefix + '/labeled.json'
@@ -265,20 +271,24 @@ if __name__ == '__main__':
         if args.loop == 0:
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
         else:
-            if epoch == 0:
-                train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
-            else:
-                if epoch == 1:
-                    data.mode_change_to_train_loop()
-                train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
+            # if epoch == 0:
+            #     train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
+            # else:
+            #     if epoch == 1:
+            data.mode_change_to_train_loop()
+            train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
         train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
-        p = progressbar.ProgressBar(train_batch_num_per_epoch)
-        p.start()
+        if args.use_progress: p = progressbar.ProgressBar(train_batch_num_per_epoch)
+        if args.use_progress: p.start()
+
         p_train_idx = 0
+        
         epoch_step, train_loss = 0, 0.
         for _, train_batch in enumerate(train_iterator):
-            p.update(p_train_idx)
             p_train_idx += 1
+            if args.use_progress: p.update(p_train_idx)
+            else:
+                if p_train_idx%100 == 0: print(p_train_idx/len(train_iterator))
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
             train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels = \
@@ -304,7 +314,7 @@ if __name__ == '__main__':
                 else:
                     pass
                 optimizer.zero_grad()
-        p.finish()
+        if args.use_progress: p.finish()
         train_loss = train_loss / train_batch_num_per_epoch
         print ('At epoch %d, total update steps is %d, the total training loss is %5f' % (epoch, epoch_step, train_loss))
         print ('++++++++++++++++++++++++++++++++++++++++++')
@@ -316,17 +326,20 @@ if __name__ == '__main__':
             dev_batch_list = \
             data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='dev')
             dev_batch_num_per_epoch = len(dev_batch_list)
-            p = progressbar.ProgressBar(dev_batch_num_per_epoch)
+            if args.use_progress: p = progressbar.ProgressBar(dev_batch_num_per_epoch)
             print ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
-            p.start()
+            if args.use_progress: p.start()
+            
             all_dev_result = []
             for p_dev_idx in range(dev_batch_num_per_epoch):
-                p.update(p_dev_idx)
+                if args.use_progress: p.update(p_dev_idx)
+                else:
+                    if p_dev_idx%100 == 0: print(p_dev_idx/len(dev_batch_num_per_epoch))
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
                 for item in dev_batch_parse_dict:
                     all_dev_result.append(item)
-            p.finish()
+            if args.use_progress: p.finish()
 
             from compute_joint_acc import compute_jacc
             all_dev_result = zip_result(all_dev_result)
