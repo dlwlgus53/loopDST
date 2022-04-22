@@ -10,6 +10,22 @@ import progressbar
 import ontology
 import random
 from torch.nn.utils import rnn
+import logging
+import logging.handlers
+
+
+log = logging.getLogger('log in data')
+log.setLevel(logging.INFO)
+formatter = logging.Formatter('[%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
+
+fileHandler = logging.FileHandler('./log.txt')
+streamHandler = logging.StreamHandler()
+
+fileHandler.setFormatter(formatter)
+streamHandler.setFormatter(formatter)
+
+log.addHandler(fileHandler)
+log.addHandler(streamHandler)
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
@@ -31,6 +47,23 @@ class DSTMultiWozData:
                     <sos_a>, <eos_a> for dialogue action prediction
                     <sos_r>, <eos_r> for response generation
         '''
+        
+        log = logging.getLogger('log in data')
+        log.setLevel(logging.INFO)
+        formatter = logging.Formatter('[%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
+
+        fileHandler = logging.FileHandler('./log.txt')
+        streamHandler = logging.StreamHandler()
+
+        fileHandler.setFormatter(formatter)
+        streamHandler.setFormatter(formatter)
+
+        log.addHandler(fileHandler)
+        log.addHandler(streamHandler)
+        
+        self.log = log
+
+
         self.use_progress = use_progress
         self.add_prefix = add_prefix
         assert self.add_prefix in [True, False]
@@ -229,7 +262,7 @@ class DSTMultiWozData:
         for idx in range(data_num):
             if self.use_progress: p.update(idx)
             else:
-                if idx%100 == 0: print(idx/data_num)
+                if idx%1000 == 0: self.log.info(f'tokenizing {idx * 100/data_num:.2f}')
             one_sess_list = []
             for turn in raw_data_list[idx]: # TODO : also should be labeled list
                 one_turn_dict = {}
@@ -521,10 +554,11 @@ class DSTMultiWozData:
         # add tagging 
         else:
             raise Exception('Wrong Evaluation Mode!!!')
-
+        
         all_bs_input_id_list, all_parse_dict_list = [], []
         for i, item in enumerate(data_list):
-            dial_turn_idx = '[d]' + item['dial_id'] + '[t]' + str(item['turn_num'])
+            if i%1000 ==0 :
+                self.log.info(f'make {eva_mode} batches! {i * 100/len(data_list):.2f}')
             one_bs_input_id_list, one_parse_dict = self.parse_one_eva_instance(item)
             all_bs_input_id_list.append(one_bs_input_id_list)
             all_parse_dict_list.append(one_parse_dict)

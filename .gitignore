@@ -5,7 +5,7 @@ DST/__pycache__/
 *.out
 *.json
 *.sh
-
+*.txt
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

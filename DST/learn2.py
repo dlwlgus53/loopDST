@@ -14,6 +14,22 @@ from inference_utlis import batch_generate
 from queue import PriorityQueue
 
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
+import logging
+import logging.handlers
+
+
+log = logging.getLogger('my_log')
+log.setLevel(logging.INFO)
+formatter = logging.Formatter('[%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
+
+fileHandler = logging.FileHandler('./log.txt')
+streamHandler = logging.StreamHandler()
+
+fileHandler.setFormatter(formatter)
+streamHandler.setFormatter(formatter)
+
+log.addHandler(fileHandler)
+log.addHandler(streamHandler)
 
 
 def init_experiment(args):
@@ -225,7 +241,7 @@ if __name__ == '__main__':
         if args.loop:
             
             confidence_que = PriorityQueue()
-            print ('Start tagging at epoch %d' % epoch)
+            log.info('Start tagging at epoch %d' % epoch)
             model.eval()
             with torch.no_grad():
                 tagging_batch_list = \
@@ -239,7 +255,7 @@ if __name__ == '__main__':
                 for p_tagging_idx in range(tagging_batch_num_per_epoch):
                     if args.use_progress: p.update(p_tagging_idx)
                     else:
-                        if p_tagging_idx%100 == 0: print(p_tagging_idx/tagging_batch_num_per_epoch)
+                        if p_tagging_idx%10 == 0: log.info(p_tagging_idx/tagging_batch_num_per_epoch)
                     one_inference_batch = tagging_batch_list[p_tagging_idx]
                     tagging_batch_parse_dict, confidence_list = batch_generate(model, one_inference_batch, data, need_confidence=True)
                     for item, confidence in zip(tagging_batch_parse_dict, confidence_list):
@@ -267,7 +283,7 @@ if __name__ == '__main__':
         model.train()
         # --- training --- #
         print ('-----------------------------------------')
-        print ('Start training at epoch %d' % epoch)
+        log.info('Start training at epoch %d' % epoch)
         if args.loop == 0:
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
         else:
@@ -288,7 +304,7 @@ if __name__ == '__main__':
             p_train_idx += 1
             if args.use_progress: p.update(p_train_idx)
             else:
-                if p_train_idx%100 == 0: print(p_train_idx/len(train_iterator))
+                if p_train_idx%100 == 0: log.info(p_train_idx/len(train_iterator))
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
             train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels = \
@@ -320,7 +336,7 @@ if __name__ == '__main__':
         print ('++++++++++++++++++++++++++++++++++++++++++')
         # **********************************************************************
         # --- evaluation --- #
-        print ('Start evaluation at epoch %d' % epoch)
+        log.info('Start evaluation at epoch %d' % epoch)
         model.eval()
         with torch.no_grad():
             dev_batch_list = \
@@ -334,7 +350,7 @@ if __name__ == '__main__':
             for p_dev_idx in range(dev_batch_num_per_epoch):
                 if args.use_progress: p.update(p_dev_idx)
                 else:
-                    if p_dev_idx%100 == 0: print(p_dev_idx/dev_batch_num_per_epoch)
+                    if p_dev_idx%100 == 0: log.info(p_dev_idx/dev_batch_num_per_epoch)
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
                 for item in dev_batch_parse_dict:
