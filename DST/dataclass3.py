@@ -14,18 +14,6 @@ import logging
 import logging.handlers
 
 
-log = logging.getLogger('log in data')
-log.setLevel(logging.INFO)
-formatter = logging.Formatter('[%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
-
-fileHandler = logging.FileHandler('./log.txt')
-streamHandler = logging.StreamHandler()
-
-fileHandler.setFormatter(formatter)
-streamHandler.setFormatter(formatter)
-
-log.addHandler(fileHandler)
-log.addHandler(streamHandler)
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']

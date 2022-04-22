@@ -255,7 +255,7 @@ if __name__ == '__main__':
                 for p_tagging_idx in range(tagging_batch_num_per_epoch):
                     if args.use_progress: p.update(p_tagging_idx)
                     else:
-                        if p_tagging_idx%10 == 0: log.info(p_tagging_idx/tagging_batch_num_per_epoch)
+                        if p_tagging_idx%100 == 0: log.info(f'tagging ing {p_tagging_idx/tagging_batch_num_per_epoch:.2f}')
                     one_inference_batch = tagging_batch_list[p_tagging_idx]
                     tagging_batch_parse_dict, confidence_list = batch_generate(model, one_inference_batch, data, need_confidence=True)
                     for item, confidence in zip(tagging_batch_parse_dict, confidence_list):
@@ -304,7 +304,7 @@ if __name__ == '__main__':
             p_train_idx += 1
             if args.use_progress: p.update(p_train_idx)
             else:
-                if p_train_idx%100 == 0: log.info(p_train_idx/len(train_iterator))
+                if p_train_idx%100 == 0: log.info(f'train ing {p_train_idx/len(train_iterator):.2f}')
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
             train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels = \
@@ -350,7 +350,7 @@ if __name__ == '__main__':
             for p_dev_idx in range(dev_batch_num_per_epoch):
                 if args.use_progress: p.update(p_dev_idx)
                 else:
-                    if p_dev_idx%100 == 0: log.info(p_dev_idx/dev_batch_num_per_epoch)
+                    if p_dev_idx%100 == 0: log.info(f'dev ing {p_dev_idx/dev_batch_num_per_epoch:.2f}')
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
                 for item in dev_batch_parse_dict:
