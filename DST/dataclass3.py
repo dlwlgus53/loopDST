@@ -75,22 +75,21 @@ class DSTMultiWozData:
         else:
             self.bs_prefix_id = []
         
-        self.isloop = isloop
         self.data_path_prefix = data_path_prefix 
         import json
-        if self.isloop:
-            try:
-                labeled_json_path = data_path_prefix + '/labeled.json'
-                # path of labeled data
-                with open(labeled_json_path) as f:
-                    labeled_data = json.load(f)
-                self.labeled_data = labeled_data
-            except:
-                print('labeled data is empty')
-                self.labeled_data = {}
+        self.isloop = 0
+        try:
+            labeled_json_path = data_path_prefix + '/labeled.json'
+            # path of labeled data
+            with open(labeled_json_path) as f:
+                labeled_data = json.load(f)
+            self.labeled_data = labeled_data
+        except:
+            print('labeled data is empty')
+            self.labeled_data = {}
                                 
         if data_mode == 'train':
-            train_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' 
+            train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' 
             # path of labeled data
             with open(train_json_path) as f:
                 train_raw_data = json.load(f)
@@ -126,14 +125,14 @@ class DSTMultiWozData:
         else:
             raise Exception('Wrong Data Mode!!!')
 
-        dev_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json'
+        dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
         with open(dev_json_path) as f:
             dev_raw_data = json.load(f)
         print ('Tokenizing raw dev data...')
         dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json'
+        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
         print ('Tokenizing raw test data...')
@@ -141,7 +140,7 @@ class DSTMultiWozData:
         self.test_data_list = self.flatten_data(test_data_id_list)
         
         
-        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' #TODO 
+        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' #TODO 
         with open(tagging_json_path) as f:
             tagging_raw_data = json.load(f)
         print ('Tokenizing raw tagging data...')
@@ -154,22 +153,23 @@ class DSTMultiWozData:
 
         self.dev_num, self.test_num, self.tagging_num = len(self.dev_data_list), len(self.test_data_list), len(self.tagging_data_list)
         if data_mode == 'train':
-            print ('train turn number is %d, dev turn number is %d, test turn number is %d ' % \
-                (len(self.train_data_list), len(self.dev_data_list), len(self.test_data_list)))
+            print ('train turn number is %d, dev turn number is %d, test turn number is %d tagging turn number is %d ' % \
+                (len(self.train_data_list), len(self.dev_data_list), len(self.test_data_list), len(self.tagging_data_list)))
             self.shuffle_mode = shuffle_mode
             self.ordering_train_data()
         else:
             pass
 
     def mode_change_to_train_loop(self):
-        train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-dev.json' 
+        self.isloop = 1
+        train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-train.json' 
         # path of labeled data
         with open(train_json_path) as f:
             train_raw_data = json.load(f)
         # read the labeled data
         print ('Tokenizing raw train again for loop data...')
         train_data_id_list = self.tokenize_raw_data(train_raw_data) # give labled data list too
-        self.train_data_list = self.flatten_data(train_data_id_list)
+        self.train_data_list = self.flatten_data(train_data_id_list, mode = 'train_loop')
         self.train_id2session_dict = {}
         self.train_dial_id_list = []
         for item in self.train_data_list:
@@ -181,6 +181,7 @@ class DSTMultiWozData:
                 self.train_id2session_dict[one_item_id] = [item]
         assert len(self.train_dial_id_list) == len(self.train_id2session_dict)
         self.train_num = len(self.train_data_list) 
+        print('Overall Number of datapoints in train_loop is ' + str(self.train_num))
     
         
     def ordering_train_data(self):
@@ -234,9 +235,13 @@ class DSTMultiWozData:
                     else: # TODO in case of original data, use same, if not, use labeld dataset file
                         # only tokenize ["user", "usdx", "resp", "bspn", "bsdx", "bspn_reform", "bsdx_reform"]
                         value_text = turn[key]
+                        if key == 'bspn' and self.isloop ==1 :
+                            dial_turn_idx = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
+                            value_text = self.labeled_data[dial_turn_idx]
                         value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
                         value_id = self.replace_sos_eos_token_id(value_id)
                         one_turn_dict[key] = value_id
+
                 one_sess_list.append(one_turn_dict)
             all_session_list.append(one_sess_list)
         p.finish()
@@ -280,7 +285,7 @@ class DSTMultiWozData:
         self.tokenizer.add_tokens(special_tokens)
         return special_tokens
 
-    def flatten_data(self, data):
+    def flatten_data(self, data, mode = 'nothing'):
         '''
             transform session data input turn data
             each item in session has length of (number of turns)
@@ -329,6 +334,7 @@ class DSTMultiWozData:
                 bs_input = self.bs_prefix_id + [self.sos_context_token_id] + bs_input[-900:] + [self.eos_context_token_id]
                 bs_output = curr_bspn
 
+                    
                 data_list.append({'dial_id': one_dial_id,
                     'turn_num': turn_id,
                     'prev_context':previous_context,
@@ -352,8 +358,6 @@ class DSTMultiWozData:
             data_num = self.train_num
             all_data_list = self.train_data_list
             self.ordering_train_data()
-            if self.isloop:
-                assert len(self.labeled_data) == 0 
         elif mode == 'train_loop':
             data_num = self.train_num
             all_data_list = self.train_data_list
@@ -372,9 +376,9 @@ class DSTMultiWozData:
                 one_output_data_list.append(item[key])
             all_output_data_list.extend(one_output_data_list)
             
-            if mode == 'train' and self.isloop:
-                dial_turn_idx = '[d]' + item['dial_id'] + '[t]' + str(item['turn_num'])
-                self.labeled_data[dial_turn_idx] = self.tokenizer.decode(item['bs_output'])
+            # if mode == 'train' and self.isloop:
+            #     dial_turn_idx = '[d]' + item['dial_id'] + '[t]' + str(item['turn_num'])
+            #     self.labeled_data[dial_turn_idx] = self.tokenizer.decode(item['bs_output'])
             
         data_num = len(all_input_data_list)
         batch_num = int(data_num/batch_size) + 1
@@ -478,7 +482,8 @@ class DSTMultiWozData:
             start_idx, end_idx = i*batch_size, (i+1)*batch_size
             if start_idx > data_num - 1:
                 break
-            end_idx = min(end_idx, data_num - 1)
+            # end_idx = min(end_idx, data_num - 1)
+            end_idx = min(end_idx, data_num)
             one_batch_list = []
             for idx in range(start_idx, end_idx):
                 one_batch_list.append(all_data_list[idx])
@@ -516,13 +521,10 @@ class DSTMultiWozData:
         all_bs_input_id_list, all_parse_dict_list = [], []
         for i, item in enumerate(data_list):
             dial_turn_idx = '[d]' + item['dial_id'] + '[t]' + str(item['turn_num'])
-            if eva_mode == 'tagging' and dial_turn_idx in self.labeled_data.keys():
-                continue
             one_bs_input_id_list, one_parse_dict = self.parse_one_eva_instance(item)
             all_bs_input_id_list.append(one_bs_input_id_list)
             all_parse_dict_list.append(one_parse_dict)
         assert len(all_bs_input_id_list) == len(all_parse_dict_list)
-        
         bs_batch_list = self.build_batch_list(all_bs_input_id_list, eva_batch_size)
         parse_dict_batch_list = self.build_batch_list(all_parse_dict_list, eva_batch_size)
 
