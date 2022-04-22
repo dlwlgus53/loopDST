@@ -111,7 +111,7 @@ class DSTMultiWozData:
             self.labeled_data = {}
                                 
         if data_mode == 'train':
-            train_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' 
+            train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' 
             # path of labeled data
             with open(train_json_path) as f:
                 train_raw_data = json.load(f)
@@ -154,7 +154,7 @@ class DSTMultiWozData:
         dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
+        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
         print ('Tokenizing raw test data...')
@@ -162,7 +162,7 @@ class DSTMultiWozData:
         self.test_data_list = self.flatten_data(test_data_id_list)
         
         
-        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' #TODO 
+        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' #TODO 
         with open(tagging_json_path) as f:
             tagging_raw_data = json.load(f)
         print ('Tokenizing raw tagging data...')
@@ -184,7 +184,7 @@ class DSTMultiWozData:
 
     def mode_change_to_train_loop(self):
         self.isloop = 1
-        train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-dev.json' 
+        train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-train.json' 
         # path of labeled data
         with open(train_json_path) as f:
             train_raw_data = json.load(f)
@@ -436,14 +436,10 @@ class DSTMultiWozData:
         return batch_list, idx_list
 
     def build_iterator(self, batch_size, mode ):
-        if mode == 'train':
-            batch_list = self.get_batches(batch_size, mode)
-        elif mode == 'train_loop':
-            batch_list, idx_list = self.get_batches(batch_size, mode)
-            
-        with open(self.data_path_prefix  + '/labeled.json', 'w') as outfile:
-            json.dump(self.labeled_data, outfile, indent=4)
-        
+        batch_list, idx_list = self.get_batches(batch_size, mode)
+        train_json_path = self.data_path_prefix  + '/labeled.json'
+        with open(train_json_path) as f:
+            self.labeled_data = json.load(f)
         for batch, idx in zip(batch_list, idx_list):
             yield batch, idx
 

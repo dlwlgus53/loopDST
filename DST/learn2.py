@@ -280,7 +280,7 @@ if __name__ == '__main__':
             cnt =0
             labeled_json_path = args.data_path_prefix + '/labeled.json'
             labeled_data = {}
-                
+
             while confidence_que.empty() != True:
                 cnt +=1
                 key, value = confidence_que.get()[1]
@@ -300,11 +300,6 @@ if __name__ == '__main__':
         if args.loop == 0:
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
         else:
-            # if epoch == 0:
-            #     train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
-            # else:
-            #     if epoch == 1:
-            
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
         train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
         if args.use_progress: p = progressbar.ProgressBar(train_batch_num_per_epoch)
@@ -313,7 +308,7 @@ if __name__ == '__main__':
         p_train_idx = 0
         
         epoch_step, train_loss = 0, 0.
-        for train_batch, _ in train_iterator:
+        for train_batch, dial_turn_key_batch in train_iterator:
             p_train_idx += 1
             if args.use_progress: p.update(p_train_idx)
             else:
@@ -327,7 +322,10 @@ if __name__ == '__main__':
                 train_batch_src_mask = train_batch_src_mask.to(device)
                 train_batch_input = train_batch_input.to(device)
                 train_batch_labels = train_batch_labels.to(device)
-            loss = model(train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels)
+            try:
+                loss = model(train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels)
+            except:
+                pdb.set_trace()
             loss = loss.mean()
             loss.backward()
             train_loss += loss.item()
