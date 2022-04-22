@@ -38,7 +38,7 @@ class DSTMultiWozData:
         
         log = logging.getLogger('log in data')
         log.setLevel(logging.INFO)
-        formatter = logging.Formatter('[%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
+        formatter = logging.Formatter('%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
 
         fileHandler = logging.FileHandler('./log.txt')
         streamHandler = logging.StreamHandler()

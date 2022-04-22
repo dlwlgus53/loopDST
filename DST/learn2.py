@@ -20,16 +20,9 @@ import logging.handlers
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
-formatter = logging.Formatter('[%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
 
-fileHandler = logging.FileHandler('./log.txt')
-streamHandler = logging.StreamHandler()
 
-fileHandler.setFormatter(formatter)
-streamHandler.setFormatter(formatter)
-
-log.addHandler(fileHandler)
-log.addHandler(streamHandler)
 
 
 def init_experiment(args):
@@ -147,6 +140,8 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
 
 import argparse
 if __name__ == '__main__':
+
+
     if torch.cuda.is_available():
         print ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
@@ -162,6 +157,18 @@ if __name__ == '__main__':
  
     args = parse_config()
     device = torch.device('cuda')
+    
+    fileHandler = logging.FileHandler(f'{args.ckpt_save_path}.txt')
+    streamHandler = logging.StreamHandler()
+
+    fileHandler.setFormatter(formatter)
+    streamHandler.setFormatter(formatter)
+
+    log.addHandler(fileHandler)
+    log.addHandler(streamHandler)
+
+
+
     
     print('seed setting')
     init_experiment(args)
