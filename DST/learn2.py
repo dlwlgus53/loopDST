@@ -246,31 +246,37 @@ if __name__ == '__main__':
         ############ tagging ####################
         # if args.loop and epoch !=0:
         if args.loop:
-            
+            data.mode_change_to_train_loop()
             confidence_que = PriorityQueue()
             log.info('Start tagging at epoch %d' % epoch)
             model.eval()
             with torch.no_grad():
-                tagging_batch_list = \
-                data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.eval_batch_size_per_gpu, eva_mode='tagging')
-                tagging_batch_num_per_epoch = len(tagging_batch_list)
+                tagging_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
+                tagging_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
                 if args.use_progress: p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
-                print ('Number of tagging batches is %d' % tagging_batch_num_per_epoch)
+                if args.use_progress: p.start()
+                p_tagging_idx = 0
+                epoch_step = 0
                 if args.use_progress: p.start()
                 all_tagging_result = []
-                p_tagging_idx = 0
-                for p_tagging_idx in range(tagging_batch_num_per_epoch):
+                
+                for train_batch, dial_turn_key_batch in tagging_iterator:
+                    p_tagging_idx += 1
                     if args.use_progress: p.update(p_tagging_idx)
                     else:
-                        if p_tagging_idx%100 == 0: log.info(f'tagging ing {p_tagging_idx/tagging_batch_num_per_epoch:.2f}')
-                    one_inference_batch = tagging_batch_list[p_tagging_idx]
-                    tagging_batch_parse_dict, confidence_list = batch_generate(model, one_inference_batch, data, need_confidence=True)
-                    for item, confidence in zip(tagging_batch_parse_dict, confidence_list):
-                        all_tagging_result.append(item)
-                        dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
-                        confidence_que.put((-confidence, (dial_turn_key , item['bspn'])))
+                        if p_tagging_idx%100 == 0: log.info(f'tagging ing {p_tagging_idx/tagging_batch_num_per_epoch:.2f}')       
+                    one_train_input_batch, one_train_output_batch = train_batch
+                    if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
+
+                    train_batch_src_tensor, train_batch_src_mask, _, _ = \
+                    data.parse_batch_tensor(train_batch)
+                    if cuda_available:
+                        src_input = train_batch_src_tensor.to(device)
+                        src_mask = train_batch_src_mask.to(device)
+                    tagging_batch_parse_dict, confidence_list = model.module.tagging(src_input, src_mask)   
+                    for predict_result,dial_turn_key, confidence in zip(tagging_batch_parse_dict, dial_turn_key_batch, confidence_list):
+                        confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
                 if args.use_progress: p.finish()
-            
             cnt =0
             labeled_json_path = args.data_path_prefix + '/labeled.json'
             labeled_data = {}
@@ -298,7 +304,7 @@ if __name__ == '__main__':
             #     train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
             # else:
             #     if epoch == 1:
-            data.mode_change_to_train_loop()
+            
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
         train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
         if args.use_progress: p = progressbar.ProgressBar(train_batch_num_per_epoch)
@@ -307,11 +313,11 @@ if __name__ == '__main__':
         p_train_idx = 0
         
         epoch_step, train_loss = 0, 0.
-        for _, train_batch in enumerate(train_iterator):
+        for train_batch, _ in train_iterator:
             p_train_idx += 1
             if args.use_progress: p.update(p_train_idx)
             else:
-                if p_train_idx%100 == 0: log.info(f'train ing {p_train_idx/len(train_iterator):.2f}')
+                if p_train_idx%100 == 0: log.info(f'train ing {p_train_idx/train_batch_num_per_epoch:.2f}')
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
             train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels = \

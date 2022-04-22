@@ -111,7 +111,7 @@ class DSTMultiWozData:
             self.labeled_data = {}
                                 
         if data_mode == 'train':
-            train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' 
+            train_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' 
             # path of labeled data
             with open(train_json_path) as f:
                 train_raw_data = json.load(f)
@@ -154,7 +154,7 @@ class DSTMultiWozData:
         dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
+        test_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
         print ('Tokenizing raw test data...')
@@ -162,7 +162,7 @@ class DSTMultiWozData:
         self.test_data_list = self.flatten_data(test_data_id_list)
         
         
-        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' #TODO 
+        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' #TODO 
         with open(tagging_json_path) as f:
             tagging_raw_data = json.load(f)
         print ('Tokenizing raw tagging data...')
@@ -184,14 +184,14 @@ class DSTMultiWozData:
 
     def mode_change_to_train_loop(self):
         self.isloop = 1
-        train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-train.json' 
+        train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-dev.json' 
         # path of labeled data
         with open(train_json_path) as f:
             train_raw_data = json.load(f)
         # read the labeled data
         print ('Tokenizing raw train again for loop data...')
         train_data_id_list = self.tokenize_raw_data(train_raw_data) # give labled data list too
-        self.train_data_list = self.flatten_data(train_data_id_list, mode = 'train_loop')
+        self.train_data_list = self.flatten_data(train_data_id_list)
         self.train_id2session_dict = {}
         self.train_dial_id_list = []
         for item in self.train_data_list:
@@ -262,7 +262,10 @@ class DSTMultiWozData:
                         value_text = turn[key]
                         if key == 'bspn' and self.isloop ==1 :
                             dial_turn_idx = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
-                            value_text = self.labeled_data[dial_turn_idx]
+                            try:
+                                value_text = self.labeled_data[dial_turn_idx]
+                            except:
+                                value_text = ''
                         value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
                         value_id = self.replace_sos_eos_token_id(value_id)
                         one_turn_dict[key] = value_id
@@ -310,7 +313,7 @@ class DSTMultiWozData:
         self.tokenizer.add_tokens(special_tokens)
         return special_tokens
 
-    def flatten_data(self, data, mode = 'nothing'):
+    def flatten_data(self, data):
         '''
             transform session data input turn data
             each item in session has length of (number of turns)
@@ -379,6 +382,7 @@ class DSTMultiWozData:
 
     def get_batches(self, batch_size, mode): # TODO get selected item.
         batch_list = []
+        idx_list = []
         if mode == 'train':
             data_num = self.train_num
             all_data_list = self.train_data_list
@@ -389,7 +393,9 @@ class DSTMultiWozData:
         else:
             raise Exception('Wrong Mode!!!')
 
-        all_input_data_list, all_output_data_list = [], []
+        all_input_data_list, all_output_data_list, all_index_list = [], [], []
+        
+        
         for item in all_data_list:
             one_input_data_list = []
             for key in ['bs_input']:
@@ -401,10 +407,10 @@ class DSTMultiWozData:
                 one_output_data_list.append(item[key])
             all_output_data_list.extend(one_output_data_list)
             
-            # if mode == 'train' and self.isloop:
-            #     dial_turn_idx = '[d]' + item['dial_id'] + '[t]' + str(item['turn_num'])
-            #     self.labeled_data[dial_turn_idx] = self.tokenizer.decode(item['bs_output'])
+            dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
+            all_index_list.append(dial_turn_key)
             
+
         data_num = len(all_input_data_list)
         batch_num = int(data_num/batch_size) + 1
 
@@ -413,23 +419,33 @@ class DSTMultiWozData:
             if start_idx > data_num - 1:
                 break
             end_idx = min(end_idx, data_num - 1)
-            one_input_batch_list, one_output_batch_list = [], []
+            one_input_batch_list, one_output_batch_list, one_index_list = [], [], []
             for idx in range(start_idx, end_idx):
                 one_input_batch_list.append(all_input_data_list[idx])
                 one_output_batch_list.append(all_output_data_list[idx])
+                one_index_list.append(all_index_list[idx])
+                
             one_batch = [one_input_batch_list, one_output_batch_list]
+            one_idx = one_index_list
             batch_list.append(one_batch)
+            idx_list.append(one_idx)
         out_str = 'Overall Number of datapoints is ' + str(data_num) + \
         ' Number of ' + mode + ' batches is ' + str(len(batch_list))
         print (out_str)
-        return batch_list
+        
+        return batch_list, idx_list
 
     def build_iterator(self, batch_size, mode ):
-        batch_list = self.get_batches(batch_size, mode)
+        if mode == 'train':
+            batch_list = self.get_batches(batch_size, mode)
+        elif mode == 'train_loop':
+            batch_list, idx_list = self.get_batches(batch_size, mode)
+            
         with open(self.data_path_prefix  + '/labeled.json', 'w') as outfile:
             json.dump(self.labeled_data, outfile, indent=4)
-        for i, batch in enumerate(batch_list):
-            yield batch
+        
+        for batch, idx in zip(batch_list, idx_list):
+            yield batch, idx
 
     def pad_batch(self, batch_id_list):
         batch_id_list = [torch.LongTensor(item) for item in batch_id_list]

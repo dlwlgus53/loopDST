@@ -30,6 +30,59 @@ class T5Gen_Model(nn.Module):
         outputs = self.model(input_ids=src_input, attention_mask=src_mask, decoder_input_ids=tgt_input, labels=tgt_output)
         loss = outputs[0]#.mean()
         return loss
+    
+    def tagging(self, src_input, src_mask):
+        generate_mode = 'bs'
+        max_decode_len = 120
+        
+        if self.add_special_decoder_token:
+            if generate_mode == 'bs':
+                start_token, end_token, start_token_id, end_token_id = '<sos_b>', '<eos_b>', self.sos_b_token_id, self.eos_b_token_id
+            else:
+                raise Exception('Wrong Generate Mode!!!')
+        else:
+            start_token, end_token = '<pad>', '</s>'
+            start_token_id, end_token_id = \
+            self.tokenizer.convert_tokens_to_ids([start_token])[0], self.tokenizer.convert_tokens_to_ids([end_token])[0]
+            
+            
+        origin_outputs = self.model(input_ids=src_input, attention_mask=src_mask, decoder_input_ids=src_input)
+        max_logit = torch.max(origin_outputs.logits,2).values
+        outputs = self.model.generate(input_ids = src_input, attention_mask = src_mask, decoder_start_token_id = start_token_id,
+            pad_token_id = self.pad_token_id, eos_token_id = end_token_id, max_length = max_decode_len)
+        # get confidence in here
+        
+        res_text_list = []
+        confidence_list = []
+        for predicted_ids, logit in zip(outputs, max_logit):
+            one_res_text = self.tokenized_decode(predicted_ids)
+            #print (one_res_text)
+            one_res_text = one_res_text.split(start_token)[-1].split(end_token)[0].strip()
+            
+            try:
+                first_idx = (predicted_ids == 32112).nonzero(as_tuple=True)[0][0] 
+            except:
+                first_idx = 0
+            try:
+                last_idx = (predicted_ids == 32100).nonzero(as_tuple=True)[0][0] + 1
+            except:
+                last_idx = len(predicted_ids)
+            confidence = torch.mean(logit[first_idx:last_idx]).item()
+            confidence_list.append(confidence)
+            
+            final_res_list = []
+            for token in one_res_text.split():
+                if token == '<_PAD_>':
+                    continue
+                else:
+                    final_res_list.append(token)
+            one_res_text = ' '.join(final_res_list).strip()
+            
+            res_text_list.append(one_res_text)
+            
+        return res_text_list, confidence_list
+
+    
 
     def tokenized_decode(self, token_id_list):
         pred_tokens = self.tokenizer.convert_ids_to_tokens(token_id_list)
