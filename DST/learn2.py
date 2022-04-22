@@ -239,7 +239,7 @@ if __name__ == '__main__':
                 for p_tagging_idx in range(tagging_batch_num_per_epoch):
                     if args.use_progress: p.update(p_tagging_idx)
                     else:
-                        if p_tagging_idx%100 == 0: print(p_tagging_idx/len(tagging_batch_num_per_epoch))
+                        if p_tagging_idx%100 == 0: print(p_tagging_idx/tagging_batch_num_per_epoch)
                     one_inference_batch = tagging_batch_list[p_tagging_idx]
                     tagging_batch_parse_dict, confidence_list = batch_generate(model, one_inference_batch, data, need_confidence=True)
                     for item, confidence in zip(tagging_batch_parse_dict, confidence_list):
@@ -334,7 +334,7 @@ if __name__ == '__main__':
             for p_dev_idx in range(dev_batch_num_per_epoch):
                 if args.use_progress: p.update(p_dev_idx)
                 else:
-                    if p_dev_idx%100 == 0: print(p_dev_idx/len(dev_batch_num_per_epoch))
+                    if p_dev_idx%100 == 0: print(p_dev_idx/dev_batch_num_per_epoch)
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
                 for item in dev_batch_parse_dict:
