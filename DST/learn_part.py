@@ -106,16 +106,16 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
     ]
     overall_batch_size = args.number_of_gpu * args.batch_size_per_gpu * args.gradient_accumulation_steps
     num_training_steps = train_num * args.epoch_num // overall_batch_size
-    print ('----------')
+    log.info ('----------')
     if optimizer_name == 'adam':
-        print ('Use Adam Optimizer for Training.')
+        log.info ('Use Adam Optimizer for Training.')
         optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=num_training_steps)
     elif optimizer_name == 'adafactor':
         from transformers.optimization import Adafactor, AdafactorSchedule
-        print ('Use Adafactor Optimizer for Training.')
+        log.info ('Use Adafactor Optimizer for Training.')
         if specify_adafactor_lr:
-            print ('Specific learning rate.')
+            log.info ('Specific learning rate.')
             optimizer = Adafactor(
                 optimizer_grouped_parameters,
                 lr=1e-3,
@@ -130,7 +130,7 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
             )
             scheduler = None
         else:
-            print ('Do not specific learning rate.')
+            log.info ('Do not specific learning rate.')
             optimizer = Adafactor(optimizer_grouped_parameters, 
                 scale_parameter=True, 
                 relative_step=True, 
@@ -139,7 +139,7 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
             scheduler = AdafactorSchedule(optimizer)
     else:
         raise Exception('Wrong Optimizer Name!!!')
-    print ('----------')
+    log.info ('----------')
     return optimizer, scheduler
 
 import argparse
@@ -147,15 +147,15 @@ if __name__ == '__main__':
 
 
     if torch.cuda.is_available():
-        print ('Cuda is available.')
+        log.info ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
     multi_gpu_training = False
     if cuda_available:
         if torch.cuda.device_count() > 1:
             multi_gpu_training = True
-            print ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
+            log.info ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
         else:
-            print ('Using single GPU training.')
+            log.info ('Using single GPU training.')
     else:
         pass
  
@@ -174,13 +174,13 @@ if __name__ == '__main__':
 
 
     
-    print('seed setting')
+    log.info('seed setting')
     init_experiment(args)
-    print ('Start loading data...')
+    log.info ('Start loading data...')
     assert args.model_name.startswith('t5')
     from transformers import T5Tokenizer
     if args.pretrained_path != 'None':
-        print ('Loading Pretrained Tokenizer...')
+        log.info ('Loading Pretrained Tokenizer...')
         tokenizer = T5Tokenizer.from_pretrained(args.pretrained_path)
     else:
         tokenizer = T5Tokenizer.from_pretrained(args.model_name)
@@ -210,7 +210,7 @@ if __name__ == '__main__':
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
                           data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
 
-    print ('Start loading model...')
+    log.info ('Start loading model...')
     if args.model_name.startswith('facebook/bart'):
         # load bart model
         from modelling.BARTModel import BARTGen_Model
@@ -239,7 +239,7 @@ if __name__ == '__main__':
         model = model.to(device)
     else:
         pass
-    print ('Model loaded')
+    log.info ('Model loaded')
 
     optimizer, scheduler = get_optimizers(model, args, data.train_num, args.optimizer_name, specify_adafactor_lr)
     optimizer.zero_grad()
@@ -250,12 +250,11 @@ if __name__ == '__main__':
         ############ tagging ####################
         # if args.loop and epoch !=0:
         if args.loop:
-            data.mode_change_to_train_loop()
             confidence_que = PriorityQueue()
             log.info('Start tagging at epoch %d' % epoch)
             model.eval()
             with torch.no_grad():
-                tagging_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
+                tagging_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='tagging')
                 tagging_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
                 if args.use_progress: p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
                 if args.use_progress: p.start()
@@ -283,22 +282,25 @@ if __name__ == '__main__':
                 
             cnt =0
             labeled_json_path = args.data_path_prefix + '/labeled.json'
-            labeled_data = {}
+            labeled_data = data.labeled_data
             qsize = confidence_que.qsize()
             while confidence_que.empty() != True:
                 cnt +=1
                 key, value = confidence_que.get()[1]
+                assert key not in labeled_data
                 labeled_data[key] = value
                 if cnt>qsize*args.confidence_percent:
                     break
             with open(labeled_json_path, 'w') as outfile:
                 json.dump(labeled_data, outfile, indent=4)
-
+        
+        data.update_labeled_data()
+ 
         # --- tagging --- #
             
         model.train()
         # --- training --- #
-        print ('-----------------------------------------')
+        log.info ('-----------------------------------------')
         log.info('Start training at epoch %d' % epoch)
         if args.loop == 0:
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
@@ -346,8 +348,8 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
         if args.use_progress: p.finish()
         train_loss = train_loss / train_batch_num_per_epoch
-        print ('At epoch %d, total update steps is %d, the total training loss is %5f' % (epoch, epoch_step, train_loss))
-        print ('++++++++++++++++++++++++++++++++++++++++++')
+        log.info ('At epoch %d, total update steps is %d, the total training loss is %5f' % (epoch, epoch_step, train_loss))
+        log.info ('++++++++++++++++++++++++++++++++++++++++++')
         # **********************************************************************
         # --- evaluation --- #
         log.info('Start evaluation at epoch %d' % epoch)
@@ -357,7 +359,7 @@ if __name__ == '__main__':
             data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='dev')
             dev_batch_num_per_epoch = len(dev_batch_list)
             if args.use_progress: p = progressbar.ProgressBar(dev_batch_num_per_epoch)
-            print ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
+            log.info ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
             if args.use_progress: p.start()
             
             all_dev_result = []
@@ -378,58 +380,59 @@ if __name__ == '__main__':
             if dev_score > max_dev_score:
                 max_dev_str = one_dev_str
                 max_dev_score = dev_score
-                print ('Saving Model...')
-                model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
+                if args.debugging == False:
+                    log.info ('Saving Model...')
+                    model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
 
-                import os
-                if os.path.exists(model_save_path):
-                    pass
-                else: # recursively construct directory
-                    os.makedirs(model_save_path, exist_ok=True)
-
-                if cuda_available and torch.cuda.device_count() > 1:
-                    model.module.save_model(model_save_path)
-                else:
-                    model.save_model(model_save_path)
-
-                import json
-                pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
-                with open(pkl_save_path, 'w') as outfile:
-                    json.dump(all_dev_result, outfile, indent=4)
-
-                #import pickle
-                #pickle.dump(all_dev_result, open(pkl_save_path, "wb"))
-
-                # --------------------------------------------------------------------------------------------- #
-                # removing extra checkpoints...
-                # only save 2 checkpoints
-                import os
-                from operator import itemgetter
-                fileData = {}
-                test_output_dir = args.ckpt_save_path
-                for fname in os.listdir(test_output_dir):
-                    if fname.startswith('epoch'):
-                        fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
-                    else:
+                    import os
+                    if os.path.exists(model_save_path):
                         pass
-                sortedFiles = sorted(fileData.items(), key=itemgetter(1))
-                max_save_num = 1
-                if len(sortedFiles) < max_save_num:
-                    pass
-                else:
-                    delete = len(sortedFiles) - max_save_num
-                    for x in range(0, delete):
-                        one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
-                        print (one_folder_name)
-                        os.system('rm -r ' + one_folder_name)
-                print ('-----------------------------------')
+                    else: # recursively construct directory
+                        os.makedirs(model_save_path, exist_ok=True)
+
+                    if cuda_available and torch.cuda.device_count() > 1:
+                        model.module.save_model(model_save_path)
+                    else:
+                        model.save_model(model_save_path)
+
+                    import json
+                    pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
+                    with open(pkl_save_path, 'w') as outfile:
+                        json.dump(all_dev_result, outfile, indent=4)
+
+                    #import pickle
+                    #pickle.dump(all_dev_result, open(pkl_save_path, "wb"))
+
+                    # --------------------------------------------------------------------------------------------- #
+                    # removing extra checkpoints...
+                    # only save 2 checkpoints
+                    import os
+                    from operator import itemgetter
+                    fileData = {}
+                    test_output_dir = args.ckpt_save_path
+                    for fname in os.listdir(test_output_dir):
+                        if fname.startswith('epoch'):
+                            fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
+                        else:
+                            pass
+                    sortedFiles = sorted(fileData.items(), key=itemgetter(1))
+                    max_save_num = 1
+                    if len(sortedFiles) < max_save_num:
+                        pass
+                    else:
+                        delete = len(sortedFiles) - max_save_num
+                        for x in range(0, delete):
+                            one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
+                            log.info (one_folder_name)
+                            os.system('rm -r ' + one_folder_name)
+                    log.info ('-----------------------------------')
                 # --------------------------------------------------------------------------------------------- #
-            print ('Currnt joint accuracy is {}, best joint accuracy is {}'.format(round(dev_score, 2), round(max_dev_score, 2)))
+            log.info ('Currnt joint accuracy is {}, best joint accuracy is {}'.format(round(dev_score, 2), round(max_dev_score, 2)))
 
-            print ('Current Result: ' + one_dev_str)
-            print ('Best Result: ' + max_dev_str)
+            log.info ('Current Result: ' + one_dev_str)
+            log.info ('Best Result: ' + max_dev_str)
 
-            print ('dev evaluation finished.')
-        print ('-----------------------------------------')
+            log.info ('dev evaluation finished.')
+        log.info ('-----------------------------------------')
         model.train()
 
