@@ -83,6 +83,10 @@ def parse_config():
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument("--loop", type=int, default=1, help="loop")
     parser.add_argument("--use_progress", type=int, default=1, help="do progress")
+    parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
+    parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
+    
+    
     
     
     return parser.parse_args()
@@ -202,9 +206,9 @@ if __name__ == '__main__':
     else:
         raise Exception('Wrong Specify LR Mode!!!')
 
-    from dataclass_100 import DSTMultiWozData
+    from dataclass_part import DSTMultiWozData
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
-                          data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress)
+                          data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
 
     print ('Start loading model...')
     if args.model_name.startswith('facebook/bart'):
@@ -258,7 +262,6 @@ if __name__ == '__main__':
                 p_tagging_idx = 0
                 epoch_step = 0
                 if args.use_progress: p.start()
-                all_tagging_result = []
                 
                 for train_batch, dial_turn_key_batch in tagging_iterator:
                     p_tagging_idx += 1
@@ -277,20 +280,20 @@ if __name__ == '__main__':
                     for predict_result,dial_turn_key, confidence in zip(tagging_batch_parse_dict, dial_turn_key_batch, confidence_list):
                         confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
                 if args.use_progress: p.finish()
+                
             cnt =0
             labeled_json_path = args.data_path_prefix + '/labeled.json'
             labeled_data = {}
-
+            qsize = confidence_que.qsize()
             while confidence_que.empty() != True:
                 cnt +=1
                 key, value = confidence_que.get()[1]
                 labeled_data[key] = value
-                # if cnt>len(all_tagging_result)*0.3:
-                #     break
-            
+                if cnt>qsize*args.confidence_percent:
+                    break
             with open(labeled_json_path, 'w') as outfile:
                 json.dump(labeled_data, outfile, indent=4)
-        
+
         # --- tagging --- #
             
         model.train()

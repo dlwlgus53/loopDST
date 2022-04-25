@@ -172,7 +172,7 @@ if __name__ == '__main__':
     else:
         raise Exception('Wrong Specify LR Mode!!!')
 
-    from dataclass3 import DSTMultiWozData
+    from dataclass import DSTMultiWozData
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
                           data_mode='train', train_data_ratio=args.train_data_ratio)
 

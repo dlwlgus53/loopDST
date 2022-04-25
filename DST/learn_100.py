@@ -20,7 +20,7 @@ all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class DSTMultiWozData:
     def __init__(self, model_name, tokenizer, data_path_prefix, shuffle_mode='shuffle_session_level', 
-        data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, use_progress = True, debugging = False):
+        data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, use_progress = True):
         '''
             model_name: t5-small or t5-base or t5-large
 
@@ -100,7 +100,6 @@ class DSTMultiWozData:
         self.data_path_prefix = data_path_prefix 
         import json
         self.isloop = 0
-        self.debugging = debugging
         try:
             labeled_json_path = data_path_prefix + '/labeled.json'
             # path of labeled data
@@ -112,8 +111,7 @@ class DSTMultiWozData:
             self.labeled_data = {}
                                 
         if data_mode == 'train':
-            train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' 
-            if self.debugging : train_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
+            train_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' 
             # path of labeled data
             with open(train_json_path) as f:
                 train_raw_data = json.load(f)
@@ -150,17 +148,13 @@ class DSTMultiWozData:
             raise Exception('Wrong Data Mode!!!')
 
         dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
-        if self.debugging : dev_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
-        
         with open(dev_json_path) as f:
             dev_raw_data = json.load(f)
         print ('Tokenizing raw dev data...')
         dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
-        if self.debugging : test_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
-        
+        test_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
         print ('Tokenizing raw test data...')
@@ -168,10 +162,7 @@ class DSTMultiWozData:
         self.test_data_list = self.flatten_data(test_data_id_list)
         
         
-        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' #TODO 
-        if self.debugging : tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
-        
-        log.info("tagging path : {tagging_json_path}")
+        tagging_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' #TODO 
         with open(tagging_json_path) as f:
             tagging_raw_data = json.load(f)
         print ('Tokenizing raw tagging data...')
@@ -194,9 +185,6 @@ class DSTMultiWozData:
     def mode_change_to_train_loop(self):
         self.isloop = 1
         train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-dev.json' 
-        if self.debugging : train_json_path = self.data_path_prefix + '/multiwoz-fine-processed-small.json' 
-
-        
         # path of labeled data
         with open(train_json_path) as f:
             train_raw_data = json.load(f)
