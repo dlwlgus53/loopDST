@@ -106,7 +106,6 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
     ]
     overall_batch_size = args.number_of_gpu * args.batch_size_per_gpu * args.gradient_accumulation_steps
     num_training_steps = train_num * args.epoch_num // overall_batch_size
-    log.info ('----------')
     if optimizer_name == 'adam':
         log.info ('Use Adam Optimizer for Training.')
         optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
@@ -139,7 +138,6 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
             scheduler = AdafactorSchedule(optimizer)
     else:
         raise Exception('Wrong Optimizer Name!!!')
-    log.info ('----------')
     return optimizer, scheduler
 
 import argparse
@@ -162,7 +160,7 @@ if __name__ == '__main__':
     args = parse_config()
     device = torch.device('cuda')
     
-    fileHandler = logging.FileHandler(f'{args.ckpt_save_path}.txt')
+    fileHandler = logging.FileHandler(f'{args.ckpt_save_path}log.txt')
     streamHandler = logging.StreamHandler()
 
     fileHandler.setFormatter(formatter)
@@ -176,13 +174,13 @@ if __name__ == '__main__':
     
     log.info('seed setting')
     init_experiment(args)
-    log.info ('Start loading data...')
     assert args.model_name.startswith('t5')
     from transformers import T5Tokenizer
     if args.pretrained_path != 'None':
-        log.info ('Loading Pretrained Tokenizer...')
+        log.info ('Loading Pretrained Tokenizer... {args.pretrained_path}')
         tokenizer = T5Tokenizer.from_pretrained(args.pretrained_path)
     else:
+        log.info ('Loading from internet {args.model_name}')
         tokenizer = T5Tokenizer.from_pretrained(args.model_name)
 
     if args.add_prefix == 'True':
@@ -207,6 +205,8 @@ if __name__ == '__main__':
         raise Exception('Wrong Specify LR Mode!!!')
 
     from dataclass_part import DSTMultiWozData
+    log.info('Initialize dataclass')
+    
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
                           data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
 
@@ -251,7 +251,8 @@ if __name__ == '__main__':
         # if args.loop and epoch !=0:
         if args.loop:
             confidence_que = PriorityQueue()
-            log.info('Start tagging at epoch %d' % epoch)
+            log.info(f'------------------------------Epoch {epoch}--------------------------------------')
+            log.info('TAGGING Session Start')
             model.eval()
             with torch.no_grad():
                 tagging_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='tagging')
@@ -266,7 +267,7 @@ if __name__ == '__main__':
                     p_tagging_idx += 1
                     if args.use_progress: p.update(p_tagging_idx)
                     else:
-                        if p_tagging_idx%100 == 0: log.info(f'tagging ing {p_tagging_idx/tagging_batch_num_per_epoch:.2f}')       
+                        if p_tagging_idx%100 == 0: log.info(f'Tagged {p_tagging_idx* 100/tagging_batch_num_per_epoch:.2f} %')       
                     one_train_input_batch, one_train_output_batch = train_batch
                     if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
 
@@ -294,14 +295,14 @@ if __name__ == '__main__':
             with open(labeled_json_path, 'w') as outfile:
                 json.dump(labeled_data, outfile, indent=4)
         
+        log.info(f"Saved tagged data until confidence {args.confidence_percent} %")
         data.update_labeled_data()
  
         # --- tagging --- #
             
         model.train()
         # --- training --- #
-        log.info ('-----------------------------------------')
-        log.info('Start training at epoch %d' % epoch)
+        log.info('Training Session Start')
         if args.loop == 0:
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
         else:
@@ -317,7 +318,7 @@ if __name__ == '__main__':
             p_train_idx += 1
             if args.use_progress: p.update(p_train_idx)
             else:
-                if p_train_idx%100 == 0: log.info(f'train ing {p_train_idx/train_batch_num_per_epoch:.2f}')
+                if p_train_idx%100 == 0: log.info(f'Training {p_train_idx*100/train_batch_num_per_epoch:.2f} %')
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
             train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels = \
@@ -348,11 +349,10 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
         if args.use_progress: p.finish()
         train_loss = train_loss / train_batch_num_per_epoch
-        log.info ('At epoch %d, total update steps is %d, the total training loss is %5f' % (epoch, epoch_step, train_loss))
-        log.info ('++++++++++++++++++++++++++++++++++++++++++')
+        log.info ('Total training loss is %5f' % (train_loss))
         # **********************************************************************
         # --- evaluation --- #
-        log.info('Start evaluation at epoch %d' % epoch)
+        log.info('Evalation Session Start')
         model.eval()
         with torch.no_grad():
             dev_batch_list = \
@@ -366,7 +366,7 @@ if __name__ == '__main__':
             for p_dev_idx in range(dev_batch_num_per_epoch):
                 if args.use_progress: p.update(p_dev_idx)
                 else:
-                    if p_dev_idx%100 == 0: log.info(f'dev ing {p_dev_idx/dev_batch_num_per_epoch:.2f}')
+                    if p_dev_idx%100 == 0: log.info(f'Evaluation {p_dev_idx*100/dev_batch_num_per_epoch:.2f} %')
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
                 for item in dev_batch_parse_dict:

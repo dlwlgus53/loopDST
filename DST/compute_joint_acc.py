@@ -69,6 +69,5 @@ def compute_jacc(data,default_cleaning_flag=True,type2_cleaning_flag=False):
 
     joint_acc /= num_turns
     
-    print('joint accuracy: {}'.format(joint_acc))
     return joint_acc
     

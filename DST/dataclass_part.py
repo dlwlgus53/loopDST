@@ -22,6 +22,7 @@ all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 class DSTMultiWozData:
     def __init__(self, model_name, tokenizer, data_path_prefix, shuffle_mode='shuffle_session_level', 
         data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, use_progress = True, debugging = False):
+        
         '''
             model_name: t5-small or t5-base or t5-large
 
@@ -83,14 +84,14 @@ class DSTMultiWozData:
         for token in all_sos_token_list:
             one_id = self.tokenizer.convert_tokens_to_ids([token])[0]
             self.all_sos_token_id_list.append(one_id)
-            self.log.info (self.tokenizer.convert_ids_to_tokens([one_id]))
-        self.log.info (len(self.all_sos_token_id_list))
+        #     self.log.info (self.tokenizer.convert_ids_to_tokens([one_id]))
+        # self.log.info (len(self.all_sos_token_id_list))
         self.all_eos_token_id_list = []
         for token in all_eos_token_list:
             one_id = self.tokenizer.convert_tokens_to_ids([token])[0]
             self.all_eos_token_id_list.append(one_id)
-            self.log.info (self.tokenizer.convert_ids_to_tokens([one_id]))
-        self.log.info (len(self.all_eos_token_id_list))
+        #     self.log.info (self.tokenizer.convert_ids_to_tokens([one_id]))
+        # self.log.info (len(self.all_eos_token_id_list))
 
         if self.add_prefix:
             bs_prefix_text = 'translate dialogue to belief state:'
@@ -128,7 +129,6 @@ class DSTMultiWozData:
                 random.shuffle(train_raw_data)
                 # randomly select a subset of training data
                 train_raw_data = train_raw_data[:few_shot_num]
-                self.log.info ('Number of training sessions is {}'.format(few_shot_num))
 
             self.log.info ('Tokenizing raw train data...')
             train_data_id_list = self.tokenize_raw_data(train_raw_data) # give labled data list too
@@ -225,7 +225,8 @@ class DSTMultiWozData:
         for idx in range(data_num):
             if self.use_progress: p.update(idx)
             else:
-                if idx%1000 == 0: self.log.info(f'tokenizing {idx * 100/data_num:.2f}')
+                # if idx%10 == 0: self.log.info(f'tokenizing {idx * 100/data_num:.2f} %')
+                pass
             one_sess_list = []
             for turn in raw_data_list[idx]: # TODO : also should be labeled list
                 one_turn_dict = {}
@@ -283,7 +284,7 @@ class DSTMultiWozData:
         """
         special_tokens = []
         special_tokens = ontology.sos_eos_tokens
-        self.log.info (special_tokens)
+        # self.log.info (special_tokens)
         #self.log.info (special_tokens)
         self.tokenizer.add_tokens(special_tokens)
         return special_tokens
@@ -377,8 +378,6 @@ class DSTMultiWozData:
                 self.train_id2session_dict[one_item_id] = [item]
         assert len(self.train_dial_id_list) == len(self.train_id2session_dict)
         self.train_num = len(self.train_data_list) 
-        self.log.info('Train_loop data point is ' + str(self.train_num))
-
 
     def get_batches(self, batch_size, mode): # TODO get selected item.
         self.update_labeled_data()
@@ -438,8 +437,8 @@ class DSTMultiWozData:
             one_idx = one_index_list
             batch_list.append(one_batch)
             idx_list.append(one_idx)
-        out_str = 'Overall Number of datapoints is ' + str(data_num) + \
-        ' Number of ' + mode + ' batches is ' + str(len(batch_list))
+        out_str = 'Overall Number of datapoints of ' + mode + ' is ' + str(data_num) + \
+        ' and batches is ' + str(len(batch_list))
         self.log.info (out_str)
         
         return batch_list, idx_list
