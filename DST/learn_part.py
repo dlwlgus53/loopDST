@@ -16,7 +16,7 @@ from queue import PriorityQueue
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
 import logging.handlers
-
+import copy
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -140,76 +140,7 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
         raise Exception('Wrong Optimizer Name!!!')
     return optimizer, scheduler
 
-import argparse
-if __name__ == '__main__':
-
-
-    if torch.cuda.is_available():
-        log.info ('Cuda is available.')
-    cuda_available = torch.cuda.is_available()
-    multi_gpu_training = False
-    if cuda_available:
-        if torch.cuda.device_count() > 1:
-            multi_gpu_training = True
-            log.info ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
-        else:
-            log.info ('Using single GPU training.')
-    else:
-        pass
- 
-    args = parse_config()
-    device = torch.device('cuda')
-    
-    fileHandler = logging.FileHandler(f'{args.ckpt_save_path}log.txt')
-    streamHandler = logging.StreamHandler()
-
-    fileHandler.setFormatter(formatter)
-    streamHandler.setFormatter(formatter)
-
-    log.addHandler(fileHandler)
-    log.addHandler(streamHandler)
-
-
-
-    
-    log.info('seed setting')
-    init_experiment(args)
-    assert args.model_name.startswith('t5')
-    from transformers import T5Tokenizer
-    if args.pretrained_path != 'None':
-        log.info ('Loading Pretrained Tokenizer... {args.pretrained_path}')
-        tokenizer = T5Tokenizer.from_pretrained(args.pretrained_path)
-    else:
-        log.info ('Loading from internet {args.model_name}')
-        tokenizer = T5Tokenizer.from_pretrained(args.model_name)
-
-    if args.add_prefix == 'True':
-        add_prefix = True
-    elif args.add_prefix == 'False':
-        add_prefix = False
-    else:
-        raise Exception('Wrong Prefix Mode!!!')
-
-    if args.add_special_decoder_token == 'True':
-        add_special_decoder_token = True
-    elif args.add_special_decoder_token == 'False':
-        add_special_decoder_token = False
-    else:
-        raise Exception('Wrong Add Special Token Mode!!!')
-
-    if args.specify_adafactor_lr == 'True':
-        specify_adafactor_lr = True
-    elif args.specify_adafactor_lr == 'False':
-        specify_adafactor_lr = False
-    else:
-        raise Exception('Wrong Specify LR Mode!!!')
-
-    from dataclass_part import DSTMultiWozData
-    log.info('Initialize dataclass')
-    
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
-                          data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
-
+def load_model(args, data, cuda_available):
     log.info ('Start loading model...')
     if args.model_name.startswith('facebook/bart'):
         # load bart model
@@ -243,7 +174,80 @@ if __name__ == '__main__':
 
     optimizer, scheduler = get_optimizers(model, args, data.train_num, args.optimizer_name, specify_adafactor_lr)
     optimizer.zero_grad()
+    
+    return model, optimizer, scheduler
 
+
+import argparse
+if __name__ == '__main__':
+
+
+    if torch.cuda.is_available():
+        log.info ('Cuda is available.')
+    cuda_available = torch.cuda.is_available()
+    multi_gpu_training = False
+    if cuda_available:
+        if torch.cuda.device_count() > 1:
+            multi_gpu_training = True
+            log.info ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
+        else:
+            log.info ('Using single GPU training.')
+    else:
+        pass
+ 
+    args = parse_config()
+    device = torch.device('cuda')
+    
+    
+    
+    fileHandler = logging.FileHandler(f'{args.ckpt_save_path}log.txt')
+    streamHandler = logging.StreamHandler()
+
+    fileHandler.setFormatter(formatter)
+    streamHandler.setFormatter(formatter)
+
+    log.addHandler(fileHandler)
+    log.addHandler(streamHandler)
+    
+    log.info('seed setting')
+    init_experiment(args)
+    assert args.model_name.startswith('t5')
+    from transformers import T5Tokenizer
+    if args.pretrained_path != 'None':
+        log.info (f'Loading Pretrained Tokenizer... {args.pretrained_path}')
+        tokenizer = T5Tokenizer.from_pretrained(args.pretrained_path)
+    else:
+        log.info ('Loading from internet {args.model_name}')
+        tokenizer = T5Tokenizer.from_pretrained(args.model_name)
+
+    if args.add_prefix == 'True':
+        add_prefix = True
+    elif args.add_prefix == 'False':
+        add_prefix = False
+    else:
+        raise Exception('Wrong Prefix Mode!!!')
+
+    if args.add_special_decoder_token == 'True':
+        add_special_decoder_token = True
+    elif args.add_special_decoder_token == 'False':
+        add_special_decoder_token = False
+    else:
+        raise Exception('Wrong Add Special Token Mode!!!')
+
+    if args.specify_adafactor_lr == 'True':
+        specify_adafactor_lr = True
+    elif args.specify_adafactor_lr == 'False':
+        specify_adafactor_lr = False
+    else:
+        raise Exception('Wrong Specify LR Mode!!!')
+
+    from dataclass_part import DSTMultiWozData
+    log.info('Initialize dataclass')
+    
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
+                          data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
+
+    model, optimizer, scheduler = load_model(args, data, cuda_available)
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
     for epoch in range(args.epoch_num):
@@ -284,6 +288,7 @@ if __name__ == '__main__':
             cnt =0
             labeled_json_path = args.data_path_prefix + '/labeled.json'
             labeled_data = data.labeled_data
+            
             qsize = confidence_que.qsize()
             while confidence_que.empty() != True:
                 cnt +=1
@@ -303,6 +308,7 @@ if __name__ == '__main__':
         model.train()
         # --- training --- #
         log.info('Training Session Start')
+        model, optimizer, scheduler = load_model(args, data, cuda_available)
         if args.loop == 0:
             train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
         else:

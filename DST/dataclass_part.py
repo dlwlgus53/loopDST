@@ -104,8 +104,9 @@ class DSTMultiWozData:
         self.isloop = 0
         self.debugging = debugging
         try:
-            labeled_json_path = data_path_prefix + '/labeled.json'
-            # path of labeled data
+            
+            labeled_json_path = data_path_prefix + '/labeled_init.json'
+            log.info (f"load initial labeld data from {labeled_json_path}")
             with open(labeled_json_path) as f:
                 labeled_data = json.load(f)
             self.labeled_data = labeled_data
