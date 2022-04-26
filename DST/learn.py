@@ -258,14 +258,14 @@ if __name__ == '__main__':
         # **********************************************************************
         # --- evaluation --- #
 
-        if args.train_data_ratio <= 0.1:
-            if epoch < 5: # first train 10 epoches
-                continue
-        elif args.train_data_ratio == 0.2:
-            if epoch < 3: # first train 5 epoches
-                continue
-        else:
-            pass
+        # if args.train_data_ratio <= 0.1:
+        #     if epoch < 5: # first train 10 epoches
+        #         continue
+        # elif args.train_data_ratio == 0.2:
+        #     if epoch < 3: # first train 5 epoches
+        #         continue
+        # else:
+        #     pass
 
         from inference_utlis import batch_generate
         print ('Start evaluation at epoch %d' % epoch)

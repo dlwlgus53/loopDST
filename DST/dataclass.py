@@ -93,6 +93,16 @@ class DSTMultiWozData:
                 # randomly select a subset of training data
                 train_raw_data = train_raw_data[:few_shot_num]
                 print ('Number of training sessions is {}'.format(few_shot_num))
+                print ('save into file')
+                train_dict = {}
+                for dial in train_raw_data:
+                    for turn in dial:
+                        dial_turn_idx = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
+                        train_dict[dial_turn_idx] = turn['bspn']
+                        
+                labeled_json_path = data_path_prefix + 'labeled_init.json'
+                with open(labeled_json_path, 'w') as outfile:
+                    json.dump(train_dict, outfile, indent=4)
 
             print ('Tokenizing raw train data...')
             train_data_id_list = self.tokenize_raw_data(train_raw_data) # give labled data list too
