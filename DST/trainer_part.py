@@ -47,7 +47,6 @@ def tagging(args,model,data,log, cuda_available, device):
             for predict_result,dial_turn_key, confidence in zip(tagging_batch_parse_dict, dial_turn_key_batch, confidence_list):
                 confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
         if args.use_progress: p.finish()
-        
     cnt =0
     labeled_json_path = args.data_path_prefix + '/labeled.json'
     labeled_data = data.labeled_data
@@ -63,9 +62,10 @@ def tagging(args,model,data,log, cuda_available, device):
     with open(labeled_json_path, 'w') as outfile:
         json.dump(labeled_data, outfile, indent=4)
     data.update_labeled_data()
-    log.info(f"Saved tagged data until confidence {args.confidence_percent} %")
+    log.info(f"Saved tagged data until confidence {float(args.confidence_percent)*100} %")
     
 def train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device):
+    
     log.info('Training Session Start')
     model.train()
     
@@ -80,6 +80,9 @@ def train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_a
     epoch_step, train_loss = 0, 0.
     for train_batch, _ in train_iterator:
         p_train_idx += 1
+        if p_train_idx == 1:
+            train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
+
         if args.use_progress: p.update(p_train_idx)
         else:
             if p_train_idx%100 == 0: log.info(f'Training {p_train_idx*100/train_batch_num_per_epoch:.2f} %')
@@ -113,6 +116,7 @@ def train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_a
             optimizer.zero_grad()
     if args.use_progress: p.finish()
     train_loss = train_loss / train_batch_num_per_epoch
+    
     return train_loss
 def evaluate(args,model,data,log, cuda_available, device):
     log.info('Evalation Session Start')

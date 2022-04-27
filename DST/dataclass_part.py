@@ -103,16 +103,19 @@ class DSTMultiWozData:
         import json
         self.isloop = 0
         self.debugging = debugging
-        try:
+        
+        init_labeled_json_path = data_path_prefix + '/labeled_init.json'
+        labeled_json_path = data_path_prefix + '/labeled.json'
+        
+        log.info (f"load initial labeled data from {init_labeled_json_path}")
+        with open(init_labeled_json_path) as f:
+            init_labeled_data = json.load(f)
+        
+        with open(labeled_json_path, 'w') as outfile:
+            json.dump(init_labeled_data, outfile, indent=4)
             
-            labeled_json_path = data_path_prefix + '/labeled_init.json'
-            log.info (f"load initial labeld data from {labeled_json_path}")
-            with open(labeled_json_path) as f:
-                labeled_data = json.load(f)
-            self.labeled_data = labeled_data
-        except:
-            self.log.info('labeled data is empty')
-            self.labeled_data = {}
+        self.labeled_data = init_labeled_data
+
                                 
         if data_mode == 'train':
             train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' 
@@ -152,7 +155,7 @@ class DSTMultiWozData:
             raise Exception('Wrong Data Mode!!!')
 
         dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
-        if self.debugging : dev_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
+        if self.debugging : dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json' 
         
         with open(dev_json_path) as f:
             dev_raw_data = json.load(f)
@@ -161,7 +164,7 @@ class DSTMultiWozData:
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
         test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
-        if self.debugging : test_json_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
+        if self.debugging : test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json' 
         
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
@@ -378,23 +381,20 @@ class DSTMultiWozData:
                 self.train_dial_id_list.append(one_item_id)
                 self.train_id2session_dict[one_item_id] = [item]
         assert len(self.train_dial_id_list) == len(self.train_id2session_dict)
-        self.train_num = len(self.train_data_list) 
+        self.before_filter_train_num = len(self.train_data_list) 
 
     def get_batches(self, batch_size, mode): # TODO get selected item.
         self.update_labeled_data()
         batch_list = []
         idx_list = []
-        data_num = self.train_num
         all_data_list = self.train_data_list
 
         if mode == 'train_loop':
             self.make_train_loop_data() # make dataset with labeled data
-            data_num = self.train_num
-            all_data_list = self.train_data_list
+
 
         elif mode == 'tagging':
-            data_num = self.train_num
-            all_data_list = self.train_data_list
+            pass
         else:
             raise Exception('Wrong Mode!!!')
 
@@ -419,9 +419,11 @@ class DSTMultiWozData:
                 one_output_data_list.append(item[key])
             all_output_data_list.extend(one_output_data_list)
             all_index_list.append(dial_turn_key)
-            
+        
         data_num = len(all_input_data_list)
         batch_num = int(data_num/batch_size) + 1
+        self.train_num = data_num
+        
 
         for i in range(batch_num):
             start_idx, end_idx = i*batch_size, (i+1)*batch_size

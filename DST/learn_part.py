@@ -73,6 +73,8 @@ def parse_config():
     parser.add_argument("--use_progress", type=int, default=1, help="do progress")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
+    parser.add_argument("--mini_epoch", type=int, default=5, help="debugging going small")
+    
     
     
     
@@ -237,69 +239,74 @@ if __name__ == '__main__':
     model, optimizer, scheduler = load_model(args, data, cuda_available)
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
+    score_list = []
     for epoch in range(args.epoch_num):
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         if args.loop:
             tagging(args,model,data,log, cuda_available, device)
             
-        if args.loop:
-            model, optimizer, scheduler = load_model(args, data, cuda_available,load_pretrained = False)
-        
-        train_loss = train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
-        log.info ('Total training loss is %5f' % (train_loss))
-        
-        all_dev_result, dev_score = evaluate(args,model,data,log, cuda_available, device)
-        one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
-        
-        if dev_score > max_dev_score:
-            max_dev_str = one_dev_str
-            max_dev_score = dev_score
-            if args.debugging == False:
-                log.info ('Saving Model...')
-                model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
+        for mini_epoch in range(args.mini_epoch):
+            mini_best_result, mini_best_str = 0, ''
+            if args.loop:
+                student, optimizer, scheduler = load_model(args, data, cuda_available,load_pretrained = False)
+            
+            train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
+            log.info ('Total training loss is %5f' % (train_loss))
+            
+            all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
+            one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
+            if dev_score > mini_best_result:
+                model = student
+                mini_best_str = one_dev_str
+                mini_best_result = dev_score
+                log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(max_dev_score, 2)))
 
-                import os
-                if os.path.exists(model_save_path):
-                    pass
-                else: # recursively construct directory
-                    os.makedirs(model_save_path, exist_ok=True)
+                if args.debugging == False:
+                    save_result(model, mini_best_str, mini_best_result)
+        score_list.append(mini_best_result)
+    log.info(score_list)
+    
+    
+    
 
-                if cuda_available and torch.cuda.device_count() > 1:
-                    model.module.save_model(model_save_path)
-                else:
-                    model.save_model(model_save_path)
 
-                import json
-                pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
-                with open(pkl_save_path, 'w') as outfile:
-                    json.dump(all_dev_result, outfile, indent=4)
+def save_result(model, one_dev_str,all_dev_result):
+    log.info ('Saving Model...')
+    model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
 
-                import os
-                from operator import itemgetter
-                fileData = {}
-                test_output_dir = args.ckpt_save_path
-                for fname in os.listdir(test_output_dir):
-                    if fname.startswith('epoch'):
-                        fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
-                    else:
-                        pass
-                sortedFiles = sorted(fileData.items(), key=itemgetter(1))
-                max_save_num = 1
-                if len(sortedFiles) < max_save_num:
-                    pass
-                else:
-                    delete = len(sortedFiles) - max_save_num
-                    for x in range(0, delete):
-                        one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
-                        log.info (one_folder_name)
-                        os.system('rm -r ' + one_folder_name)
-       
-        
-            log.info ('Currnt joint accuracy is {}, best joint accuracy is {}'.format(round(dev_score, 2), round(max_dev_score, 2)))
-            log.info ('Current Result: ' + one_dev_str)
-            log.info ('Best Result: ' + max_dev_str)
+    import os
+    if os.path.exists(model_save_path):
+        pass
+    else: # recursively construct directory
+        os.makedirs(model_save_path, exist_ok=True)
 
-            log.info ('dev evaluation finished.')
-        log.info ('-----------------------------------------')
-        model.train()
+    if cuda_available and torch.cuda.device_count() > 1:
+        model.module.save_model(model_save_path)
+    else:
+        model.save_model(model_save_path)
+
+    import json
+    pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
+    with open(pkl_save_path, 'w') as outfile:
+        json.dump(all_dev_result, outfile, indent=4)
+
+    import os
+    from operator import itemgetter
+    fileData = {}
+    test_output_dir = args.ckpt_save_path
+    for fname in os.listdir(test_output_dir):
+        if fname.startswith('epoch'):
+            fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
+        else:
+            pass
+    sortedFiles = sorted(fileData.items(), key=itemgetter(1))
+    max_save_num = 1
+    if len(sortedFiles) < max_save_num:
+        pass
+    else:
+        delete = len(sortedFiles) - max_save_num
+        for x in range(0, delete):
+            one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
+            log.info (one_folder_name)
+            os.system('rm -r ' + one_folder_name)
 
