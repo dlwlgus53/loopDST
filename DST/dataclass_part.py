@@ -20,7 +20,7 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class DSTMultiWozData:
-    def __init__(self, model_name, tokenizer, data_path_prefix, shuffle_mode='shuffle_session_level', 
+    def __init__(self, model_name, tokenizer, data_path_prefix, log_path, shuffle_mode='shuffle_session_level', 
         data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, use_progress = True, debugging = False):
         
         '''
@@ -40,9 +40,9 @@ class DSTMultiWozData:
         
         log = logging.getLogger('log in data')
         log.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) > %(message)s')
+        formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
 
-        fileHandler = logging.FileHandler('./log.txt')
+        fileHandler = logging.FileHandler(log_path)
         streamHandler = logging.StreamHandler()
 
         fileHandler.setFormatter(formatter)
