@@ -81,7 +81,7 @@ def parse_config():
     
     return parser.parse_args()
 
-def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr):
+def get_optimizers(model, args, specify_adafactor_lr):
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
@@ -94,13 +94,14 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
             "weight_decay": 0.0,
         },
     ]
-    overall_batch_size = args.number_of_gpu * args.batch_size_per_gpu * args.gradient_accumulation_steps
-    num_training_steps = train_num * args.epoch_num // overall_batch_size
-    if optimizer_name == 'adam':
-        log.info ('Use Adam Optimizer for Training.')
-        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=num_training_steps)
-    elif optimizer_name == 'adafactor':
+    # overall_batch_size = args.number_of_gpu * args.batch_size_per_gpu * args.gradient_accumulation_steps
+    # num_training_steps = train_num * args.epoch_num // overall_batch_size
+    if args.optimizer_name == 'adam':
+        # log.info ('Use Adam Optimizer for Training.')
+        # optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+        # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=num_training_steps)
+        pass
+    elif args.optimizer_name == 'adafactor':
         from transformers.optimization import Adafactor, AdafactorSchedule
         if specify_adafactor_lr:
             log.info ('Specific learning rate.')
@@ -160,17 +161,18 @@ def load_model(args, data, cuda_available, load_pretrained = True):
     else:
         pass
     log.info ('Model loaded')
+    return model
 
-    optimizer, scheduler = get_optimizers(model, args, data.train_num, args.optimizer_name, specify_adafactor_lr)
+
+def load_optimizer(model, args,  specify_adafactor_lr):
+    optimizer, scheduler = get_optimizers(model, args, specify_adafactor_lr)
     optimizer.zero_grad()
+    return optimizer, scheduler
     
-    return model, optimizer, scheduler
 
 
 import argparse
 if __name__ == '__main__':
-
-
     if torch.cuda.is_available():
         log.info ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
@@ -236,7 +238,8 @@ if __name__ == '__main__':
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
                           data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
 
-    model, optimizer, scheduler = load_model(args, data, cuda_available)
+    model = load_model(args, data, cuda_available)
+    optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
     score_list = []
@@ -245,11 +248,11 @@ if __name__ == '__main__':
         if args.loop:
             tagging(args,model,data,log, cuda_available, device)
             
+        if args.loop:
+            student= load_model(args, data, cuda_available,load_pretrained = False)
+            optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
         for mini_epoch in range(args.mini_epoch):
             mini_best_result, mini_best_str = 0, ''
-            if args.loop:
-                student, optimizer, scheduler = load_model(args, data, cuda_available,load_pretrained = False)
-            
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
             log.info ('Total training loss is %5f' % (train_loss))
             
@@ -259,10 +262,11 @@ if __name__ == '__main__':
                 model = student
                 mini_best_str = one_dev_str
                 mini_best_result = dev_score
-                log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(max_dev_score, 2)))
 
                 if args.debugging == False:
                     save_result(model, mini_best_str, mini_best_result)
+            log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
+            
         score_list.append(mini_best_result)
     log.info(score_list)
     

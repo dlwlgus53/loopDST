@@ -34,7 +34,7 @@ def tagging(args,model,data,log, cuda_available, device):
             p_tagging_idx += 1
             if args.use_progress: p.update(p_tagging_idx)
             else:
-                if p_tagging_idx%100 == 0: log.info(f'Tagged {p_tagging_idx* 100/tagging_batch_num_per_epoch:.2f} %')       
+                if p_tagging_idx%10 == 0: log.info(f'Tagged {p_tagging_idx* 100/tagging_batch_num_per_epoch:.2f} %')       
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
 
@@ -64,7 +64,7 @@ def tagging(args,model,data,log, cuda_available, device):
     data.update_labeled_data()
     log.info(f"Saved tagged data until confidence {float(args.confidence_percent)*100} %")
     
-def train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device):
+def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device):
     
     log.info('Training Session Start')
     model.train()
@@ -73,6 +73,7 @@ def train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_a
         train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
     else:
         train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
+        
     train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
     if args.use_progress: p = progressbar.ProgressBar(train_batch_num_per_epoch)
     if args.use_progress: p.start()
