@@ -170,6 +170,50 @@ def load_optimizer(model, args,  specify_adafactor_lr):
     return optimizer, scheduler
     
 
+    
+
+
+def save_result(model, one_dev_str,all_dev_result):
+    log.info ('Saving Model...')
+    model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
+
+    import os
+    if os.path.exists(model_save_path):
+        pass
+    else: # recursively construct directory
+        os.makedirs(model_save_path, exist_ok=True)
+
+    if cuda_available and torch.cuda.device_count() > 1:
+        model.module.save_model(model_save_path)
+    else:
+        model.save_model(model_save_path)
+
+    import json
+    pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
+    with open(pkl_save_path, 'w') as outfile:
+        json.dump(all_dev_result, outfile, indent=4)
+
+    import os
+    from operator import itemgetter
+    fileData = {}
+    test_output_dir = args.ckpt_save_path
+    for fname in os.listdir(test_output_dir):
+        if fname.startswith('epoch'):
+            fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
+        else:
+            pass
+    sortedFiles = sorted(fileData.items(), key=itemgetter(1))
+    max_save_num = 1
+    if len(sortedFiles) < max_save_num:
+        pass
+    else:
+        delete = len(sortedFiles) - max_save_num
+        for x in range(0, delete):
+            one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
+            log.info (one_folder_name)
+            os.system('rm -r ' + one_folder_name)
+
+
 
 import argparse
 if __name__ == '__main__':
@@ -271,46 +315,3 @@ if __name__ == '__main__':
     log.info(score_list)
     
     
-    
-
-
-def save_result(model, one_dev_str,all_dev_result):
-    log.info ('Saving Model...')
-    model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
-
-    import os
-    if os.path.exists(model_save_path):
-        pass
-    else: # recursively construct directory
-        os.makedirs(model_save_path, exist_ok=True)
-
-    if cuda_available and torch.cuda.device_count() > 1:
-        model.module.save_model(model_save_path)
-    else:
-        model.save_model(model_save_path)
-
-    import json
-    pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
-    with open(pkl_save_path, 'w') as outfile:
-        json.dump(all_dev_result, outfile, indent=4)
-
-    import os
-    from operator import itemgetter
-    fileData = {}
-    test_output_dir = args.ckpt_save_path
-    for fname in os.listdir(test_output_dir):
-        if fname.startswith('epoch'):
-            fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
-        else:
-            pass
-    sortedFiles = sorted(fileData.items(), key=itemgetter(1))
-    max_save_num = 1
-    if len(sortedFiles) < max_save_num:
-        pass
-    else:
-        delete = len(sortedFiles) - max_save_num
-        for x in range(0, delete):
-            one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
-            log.info (one_folder_name)
-            os.system('rm -r ' + one_folder_name)
-
