@@ -214,9 +214,16 @@ def save_result(model, one_dev_str,all_dev_result):
             os.system('rm -r ' + one_folder_name)
 
 
+def makedirs(path): 
+   try: 
+        os.makedirs(path) 
+   except OSError: 
+       if not os.path.isdir(path): 
+           raise
 
 import argparse
 if __name__ == '__main__':
+    # MAKE FOLDER
     if torch.cuda.is_available():
         log.info ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
@@ -232,6 +239,7 @@ if __name__ == '__main__':
  
     args = parse_config()
     device = torch.device('cuda')
+    makedirs(args.ckpt_save_path)
     
     
     
@@ -295,8 +303,9 @@ if __name__ == '__main__':
         if args.loop:
             student= load_model(args, data, cuda_available,load_pretrained = False)
             optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
+        mini_best_result, mini_best_str = 0, ''
         for mini_epoch in range(args.mini_epoch):
-            mini_best_result, mini_best_str = 0, ''
+
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
             log.info ('Total training loss is %5f' % (train_loss))
             
