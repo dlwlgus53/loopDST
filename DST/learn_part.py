@@ -265,16 +265,17 @@ if __name__ == '__main__':
             log.info ('Total training loss is %5f' % (train_loss))
             
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
-            one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
+            
             if dev_score > mini_best_result:
                 model = student
+                one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
                 mini_best_str = one_dev_str
                 mini_best_result = dev_score
 
                 if args.debugging == False:
                     save_result(model, mini_best_str, mini_best_result)
-            log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
             
+            log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
         score_list.append(mini_best_result)
     log.info(score_list)
     
