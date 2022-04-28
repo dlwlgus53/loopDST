@@ -169,10 +169,16 @@ def load_optimizer(model, args,  specify_adafactor_lr):
     optimizer.zero_grad()
     return optimizer, scheduler
     
-
+def makedirs(path): 
+   try: 
+        os.makedirs(path) 
+   except OSError: 
+       if not os.path.isdir(path): 
+           raise
 
 import argparse
 if __name__ == '__main__':
+    # MAKE FOLDER
     if torch.cuda.is_available():
         log.info ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
@@ -188,6 +194,7 @@ if __name__ == '__main__':
  
     args = parse_config()
     device = torch.device('cuda')
+    makedirs(args.ckpt_save_path)
     
     
     
