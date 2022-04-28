@@ -258,8 +258,9 @@ if __name__ == '__main__':
         if args.loop:
             student= load_model(args, data, cuda_available,load_pretrained = False)
             optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
+        mini_best_result, mini_best_str = 0, ''
         for mini_epoch in range(args.mini_epoch):
-            mini_best_result, mini_best_str = 0, ''
+
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
             log.info ('Total training loss is %5f' % (train_loss))
             
