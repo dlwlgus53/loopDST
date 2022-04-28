@@ -455,13 +455,6 @@ class DSTMultiWozData:
         batch_list, idx_list = self.get_batches(batch_size, mode)
         cnt = 0
         for batch, idx in zip(batch_list, idx_list):
-            cnt +=1
-            if cnt <40:
-                print(self.tokenizer.decode(batch[0][0]))
-                print(self.tokenizer.decode(batch[0][1]))
-                print(self.tokenizer.decode(batch[1][0]))
-                print(self.tokenizer.decode(batch[1][1]))
-            
             yield batch, idx
 
     def pad_batch(self, batch_id_list):
