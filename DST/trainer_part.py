@@ -32,6 +32,8 @@ def tagging(args,model,data,log, cuda_available, device):
         
         for train_batch, dial_turn_key_batch in tagging_iterator:
             p_tagging_idx += 1
+            if p_tagging_idx == 1:
+                tagging_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
             if args.use_progress: p.update(p_tagging_idx)
             else:
                 if p_tagging_idx%10 == 0: log.info(f'Tagged {p_tagging_idx* 100/tagging_batch_num_per_epoch:.2f} %')       

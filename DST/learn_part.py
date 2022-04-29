@@ -223,6 +223,7 @@ def makedirs(path):
 
 import argparse
 if __name__ == '__main__':
+    log_sentence = []
     # MAKE FOLDER
     if torch.cuda.is_available():
         log.info ('Cuda is available.')
@@ -238,6 +239,8 @@ if __name__ == '__main__':
         pass
  
     args = parse_config()
+    log.info(args)
+    
     device = torch.device('cuda')
     makedirs(args.ckpt_save_path)
     
@@ -294,23 +297,27 @@ if __name__ == '__main__':
     optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
-    score_list = []
+    score_list = ["Best scores"]
     for epoch in range(args.epoch_num):
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
+        log_sentence.append(f"Epoch {epoch}")
+        
         if args.loop:
             tagging(args,model,data,log, cuda_available, device)
+            log_sentence.append(f"Tagging : {data.train_num}")
             
         if args.loop:
             student= load_model(args, data, cuda_available,load_pretrained = False)
             optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
-        mini_best_result, mini_best_str = 0, ''
+        mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
 
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
+            if mini_epoch == 0: log_sentence.append(f"Tagging : {data.train_num}")
             log.info ('Total training loss is %5f' % (train_loss))
             
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
-            
+            mini_score_list.append(str(dev_score))
             if dev_score > mini_best_result:
                 model = student
                 one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
@@ -319,9 +326,19 @@ if __name__ == '__main__':
 
                 if args.debugging == False:
                     save_result(model, mini_best_str, mini_best_result)
-            
+        
             log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
-        score_list.append(mini_best_result)
+        
+        log_sentence.append(" ".join(mini_score_list))
+        score_list.append(str(mini_best_result))
+    
+    log_sentence.append(" ".join(score_list))    
     log.info(score_list)
+    
+    with open(f'{args.ckpt_save_path}log.txt', 'w') as f:
+        for item in log_sentence:
+            f.write("%s\n" % item)
+            
+        
     
     
