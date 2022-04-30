@@ -170,9 +170,6 @@ def load_optimizer(model, args,  specify_adafactor_lr):
     return optimizer, scheduler
     
 
-    
-
-
 def save_result(model, one_dev_str,all_dev_result):
     log.info ('Saving Model...')
     model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
@@ -308,12 +305,13 @@ if __name__ == '__main__':
             
         if args.loop:
             student= load_model(args, data, cuda_available,load_pretrained = False)
+            
             optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
 
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
-            if mini_epoch == 0: log_sentence.append(f"Tagging : {data.train_num}")
+            if mini_epoch == 0: log_sentence.append(f"Train : {data.train_num}")
             log.info ('Total training loss is %5f' % (train_loss))
             
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)

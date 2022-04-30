@@ -12,6 +12,7 @@ from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
 from inference_utlis import batch_generate
+import time
 
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
@@ -25,15 +26,15 @@ def tagging(args,model,data,log, cuda_available, device):
     model.eval()
     with torch.no_grad():
         tagging_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='tagging')
-        tagging_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
-        if args.use_progress: p = progressbar.ProgressBar(tagging_batch_num_per_epoch)
+        _ = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
+        if args.use_progress: p = progressbar.ProgressBar(_)
         if args.use_progress: p.start()
         p_tagging_idx = 0
         
         for train_batch, dial_turn_key_batch in tagging_iterator:
-            p_tagging_idx += 1
-            if p_tagging_idx == 1:
+            if p_tagging_idx == 0:
                 tagging_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
+            p_tagging_idx += 1
             if args.use_progress: p.update(p_tagging_idx)
             else:
                 if p_tagging_idx%10 == 0: log.info(f'Tagged {p_tagging_idx* 100/tagging_batch_num_per_epoch:.2f} %')       
@@ -61,10 +62,12 @@ def tagging(args,model,data,log, cuda_available, device):
         labeled_data[key] = value
         if cnt>qsize*args.confidence_percent:
             break
+    
     with open(labeled_json_path, 'w') as outfile:
         json.dump(labeled_data, outfile, indent=4)
+        time.sleep(3)
     data.update_labeled_data()
-    log.info(f"Saved tagged data until confidence {float(args.confidence_percent)*100} %")
+    log.info(f"Saved {cnt} tagged data until confidence {float(args.confidence_percent)*100} %")
     
 def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device):
     
@@ -82,9 +85,9 @@ def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_
     p_train_idx = 0
     epoch_step, train_loss = 0, 0.
     for train_batch, _ in train_iterator:
-        p_train_idx += 1
-        if p_train_idx == 1:
+        if p_train_idx == 0:
             train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
+        p_train_idx += 1
 
         if args.use_progress: p.update(p_train_idx)
         else:
