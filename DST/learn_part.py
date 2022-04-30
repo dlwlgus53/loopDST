@@ -170,7 +170,7 @@ def load_optimizer(model, args,  specify_adafactor_lr):
     return optimizer, scheduler
     
 
-def save_result(model, one_dev_str,all_dev_result):
+def save_result(epoch, model, one_dev_str,all_dev_result):
     log.info ('Saving Model...')
     model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
 
@@ -195,7 +195,7 @@ def save_result(model, one_dev_str,all_dev_result):
     fileData = {}
     test_output_dir = args.ckpt_save_path
     for fname in os.listdir(test_output_dir):
-        if fname.startswith('epoch'):
+        if fname.startswith(f'epoch_{epoch}'):
             fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
         else:
             pass
@@ -314,21 +314,27 @@ if __name__ == '__main__':
             if mini_epoch == 0: log_sentence.append(f"Train : {data.train_num}")
             log.info ('Total training loss is %5f' % (train_loss))
             
+            
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
+            one_dev_str = 'miniepoch{}_dev_joint_accuracy_{}'.format(mini_epoch, round(dev_score,2))
+            log.info(one_dev_str)
             mini_score_list.append(str(dev_score))
+            
             if dev_score > mini_best_result:
                 model = student
                 one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
                 mini_best_str = one_dev_str
                 mini_best_result = dev_score
 
-                if args.debugging == False:
-                    save_result(model, mini_best_str, mini_best_result)
+                
+                save_result(epoch, model, mini_best_str, mini_best_result)
         
             log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
         
         log_sentence.append(" ".join(mini_score_list))
         score_list.append(str(mini_best_result))
+        
+
     
     log_sentence.append(" ".join(score_list))    
     log.info(score_list)
