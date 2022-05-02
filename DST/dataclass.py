@@ -74,6 +74,7 @@ class DSTMultiWozData:
             self.bs_prefix_id = []
 
         import json
+        
         if data_mode == 'train':
             train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json'
             # path of labeled data

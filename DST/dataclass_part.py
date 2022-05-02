@@ -21,7 +21,7 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class DSTMultiWozData:
-    def __init__(self, model_name, tokenizer, data_path_prefix, log_path, shuffle_mode='shuffle_session_level', 
+    def __init__(self, model_name, tokenizer, data_path_prefix, log_path, tagging_all = False, shuffle_mode='shuffle_session_level', 
         data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, use_progress = True, debugging = False):
         
         '''
@@ -55,7 +55,8 @@ class DSTMultiWozData:
         self.log = log
 
 
-        self.use_progress = use_progress
+        self.use_progress = use_progress    
+        self.tagging_all = tagging_all
         self.add_prefix = add_prefix
         assert self.add_prefix in [True, False]
         self.add_special_decoder_token = add_special_decoder_token
@@ -117,7 +118,8 @@ class DSTMultiWozData:
             json.dump(init_labeled_data, outfile, indent=4)
             time.sleep(3)
             
-        self.labeled_data = init_labeled_data
+        self.init_labeled_data = copy.deepcopy(init_labeled_data)
+        self.labeled_data = copy.deepcopy(init_labeled_data)
 
                                 
         if data_mode == 'train':
@@ -391,10 +393,6 @@ class DSTMultiWozData:
 
     def get_batches(self, batch_size, mode): # TODO get selected item.
         self.update_labeled_data()
-        batch_list = []
-        idx_list = []
-        all_data_list = self.train_data_list
-
         if mode == 'train_loop':
             self.make_train_loop_data() # make dataset with labeled data
             batch_list = []
@@ -413,11 +411,10 @@ class DSTMultiWozData:
         for item in all_data_list:
  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
-            if dial_turn_key == '[d]pmul2437[t]7' and mode == 'train_loop':
-                pass
             if dial_turn_key not in self.labeled_data.keys() and mode == 'train_loop':
                 continue
-            if dial_turn_key in self.labeled_data.keys() and mode == 'tagging':
+            if dial_turn_key in self.labeled_data.keys() and mode == 'tagging'\
+                and not self.tagging_all:
                 continue
 
             one_input_data_list = []

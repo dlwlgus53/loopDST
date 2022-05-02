@@ -19,6 +19,10 @@ import logging
 import logging.handlers
 import copy
 
+def merge_two_dicts(x, y):
+    z = x.copy()   # start with keys and values of x
+    z.update(y)    # modifies z with keys and values of y
+    return z
 
 def tagging(args,model,data,log, cuda_available, device):
     confidence_que = PriorityQueue()
@@ -50,19 +54,26 @@ def tagging(args,model,data,log, cuda_available, device):
             for predict_result,dial_turn_key, confidence in zip(tagging_batch_parse_dict, dial_turn_key_batch, confidence_list):
                 confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
         if args.use_progress: p.finish()
+    
     cnt =0
     labeled_json_path = args.data_path_prefix + '/labeled.json'
-    labeled_data = data.labeled_data
     
+    if args.tagging_all:
+        labeled_data = {}
+    else:
+        labeled_data = data.labeled_data
+        
+        
     qsize = confidence_que.qsize()
     while confidence_que.empty() != True:
         cnt +=1
         key, value = confidence_que.get()[1]
         assert key not in labeled_data
         labeled_data[key] = value
-        if cnt>qsize*args.confidence_percent:
+        if cnt>qsize*args.confidence_percent and not args.tagging_all:
             break
     
+    labeled_data = merge_two_dicts(labeled_data, data.init_labeled_data)
     with open(labeled_json_path, 'w') as outfile:
         json.dump(labeled_data, outfile, indent=4)
         time.sleep(3)

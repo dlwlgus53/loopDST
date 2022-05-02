@@ -73,7 +73,9 @@ def parse_config():
     parser.add_argument("--use_progress", type=int, default=1, help="do progress")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
-    parser.add_argument("--mini_epoch", type=int, default=5, help="debugging going small")
+    parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
+    parser.add_argument("--tagging_all", type=int, default=0, help="tagging all?")
+    
     
     
     
@@ -287,8 +289,9 @@ if __name__ == '__main__':
     from dataclass_part import DSTMultiWozData
     log.info('Initialize dataclass')
     
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
-                          data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  tagging_all = args.tagging_all, \
+        log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
+        data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
 
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
@@ -318,7 +321,7 @@ if __name__ == '__main__':
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
             one_dev_str = 'miniepoch{}_dev_joint_accuracy_{}'.format(mini_epoch, round(dev_score,2))
             log.info(one_dev_str)
-            mini_score_list.append(str(dev_score))
+            mini_score_list.append(f'{dev_score:.2f}')
             
             if dev_score > mini_best_result:
                 model = student
@@ -332,7 +335,7 @@ if __name__ == '__main__':
             log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
         
         log_sentence.append(" ".join(mini_score_list))
-        score_list.append(str(mini_best_result))
+        score_list.append(f'{mini_best_result:.2f}')
         
 
     
