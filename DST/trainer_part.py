@@ -56,7 +56,7 @@ def tagging(args,model,data,log, cuda_available, device):
         if args.use_progress: p.finish()
     
     cnt =0
-    labeled_json_path = args.data_path_prefix + '/labeled.json'
+    labeled_json_path = args.ckpt_save_path + '/labeled.json'
     
     if args.tagging_all:
         labeled_data = {}

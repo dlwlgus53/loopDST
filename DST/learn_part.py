@@ -289,7 +289,7 @@ if __name__ == '__main__':
     from dataclass_part import DSTMultiWozData
     log.info('Initialize dataclass')
     
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  tagging_all = args.tagging_all, \
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, tagging_all = args.tagging_all, \
         log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
         data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
 

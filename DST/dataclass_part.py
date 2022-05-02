@@ -21,7 +21,7 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class DSTMultiWozData:
-    def __init__(self, model_name, tokenizer, data_path_prefix, log_path, tagging_all = False, shuffle_mode='shuffle_session_level', 
+    def __init__(self, model_name, tokenizer, data_path_prefix, ckpt_save_path, log_path, tagging_all = False, shuffle_mode='shuffle_session_level', 
         data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0, use_progress = True, debugging = False):
         
         '''
@@ -102,12 +102,13 @@ class DSTMultiWozData:
             self.bs_prefix_id = []
         
         self.data_path_prefix = data_path_prefix 
+        self.ckpt_save_path = ckpt_save_path 
         import json
         self.isloop = 0
         self.debugging = debugging
         
         init_labeled_json_path = data_path_prefix + '/labeled_init.json'
-        labeled_json_path = data_path_prefix + '/labeled.json'
+        labeled_json_path = ckpt_save_path + '/labeled.json'
         
         log.info (f"load initial labeled data from {init_labeled_json_path}")
         with open(init_labeled_json_path) as f:
@@ -455,7 +456,7 @@ class DSTMultiWozData:
         return batch_list, idx_list
 
     def update_labeled_data(self):
-        labeled_path = self.data_path_prefix  + '/labeled.json'
+        labeled_path = self.ckpt_save_path  + '/labeled.json'
         with open(labeled_path) as f:
             self.labeled_data = json.load(f)
             time.sleep(3)
