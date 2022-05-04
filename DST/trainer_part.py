@@ -62,16 +62,21 @@ def tagging(args,model,data,log, cuda_available, device):
         labeled_data = {}
     else:
         labeled_data = data.labeled_data
+        # changed part
+        previous_len = len(labeled_data)
         
-        
-    qsize = confidence_que.qsize()
+    qsize = confidence_que.qsize() - previous_len
+    over = False
     while confidence_que.empty() != True:
-        cnt +=1
         key, value = confidence_que.get()[1]
-        assert key not in labeled_data
-        labeled_data[key] = value
+        # assert key not in labeled_data
+        if key not in labeled_data and over == False:
+            cnt+=1
+            labeled_data[key] = value
+        if key in labeled_data:
+            labeled_data[key] = value
         if cnt>qsize*args.confidence_percent and not args.tagging_all:
-            break
+            over = True
     
     labeled_data = merge_two_dicts(labeled_data, data.init_labeled_data)
     with open(labeled_json_path, 'w') as outfile:

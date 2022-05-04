@@ -414,9 +414,12 @@ class DSTMultiWozData:
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
             if dial_turn_key not in self.labeled_data.keys() and mode == 'train_loop':
                 continue
-            if dial_turn_key in self.labeled_data.keys() and mode == 'tagging'\
-                and not self.tagging_all:
-                continue
+            
+            # temporaly changed part
+            
+            # if dial_turn_key in self.labeled_data.keys() and mode == 'tagging'\
+            #     and not self.tagging_all:
+            #     continue
 
             one_input_data_list = []
             for key in ['bs_input']:
