@@ -13,7 +13,6 @@ import logging.handlers
 from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
 from transformers import pipeline
 
-from dst import paser_bs
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
