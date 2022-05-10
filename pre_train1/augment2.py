@@ -66,10 +66,8 @@ def makedirs(path):
 def remove_special_character(text):
     for token in sos_eos_tokens:
         text = text.replace(token, '')
-
     text = text.replace( '[', '')
     text = text.replace( ']', '')
-
     return text.strip()
 
 def get_label_position(input_ids, label_ids):
@@ -98,7 +96,7 @@ def change(tokenizer, model, input_text, label, model_special_tokens, option):
 
     if option == 'similar':
         # set mask as random
-        rand = torch.rand(input_ids.shape) # batch x token length, # 바꾸면 안될 단어 추가
+        rand = torch.rand(input_ids.shape) # 바꾸면 안될 단어 추가
         mask_arr = rand < 0.30 
         for position in overlap_position:
             mask_arr[position] = False
@@ -116,7 +114,7 @@ def change(tokenizer, model, input_text, label, model_special_tokens, option):
                     flag = True
                     mask_arr[position] = True
             if flag == False:
-                mask_arr[random.choice(overlap_position)] = True # 바꿨는데 같은 경우는 어쩌지?!
+                mask_arr[random.choice(overlap_position)] = True
     else:
         print("wrong option!")
 
@@ -128,7 +126,15 @@ def change(tokenizer, model, input_text, label, model_special_tokens, option):
         new_text = tokenizer.decode(prediction[0]) # masked
         new_text = new_text.replace('<s>','')
         new_text = new_text.replace('</s>','')
+        new_text = new_text.replace('\'',' \'')
+        new_text = new_text.replace('.',' .')
+        new_text = new_text.replace('?',' ?')
+        new_text = new_text.replace('!',' !')
+        new_text = new_text.lower()
 
+    if new_text == input_text and option == 'different':
+        new_text = '-1'
+        
     new_text = '<sos_u> ' + new_text + ' <eos_u>'
     return new_text
 
