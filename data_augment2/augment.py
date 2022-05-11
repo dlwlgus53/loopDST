@@ -1,5 +1,6 @@
 # https://jimmy-ai.tistory.com/196
-
+import sys
+sys.path.append('../')
 import random
 import torch
 import os
@@ -11,7 +12,9 @@ import logging
 import numpy as np
 import logging.handlers
 from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
-from transformers import pipeline
+from transformers import T5Tokenizer
+from DST.modelling.T5Model import T5Gen_Model
+
 
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
@@ -33,6 +36,7 @@ def parse_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
     parser.add_argument('--seed', type=int ,default = 1, help='The path where the data stores.')
+    parser.add_argument('--pretrained_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     
     return parser.parse_args()
 
@@ -63,58 +67,19 @@ def get_label_position(input_ids, label_ids):
     return overlap_index
 
 
-def change(tokenizer, model, input_text, label, model_special_tokens, option):
-    new_text = ''
-    input_text = remove_special_character(input_text)
-    label = remove_special_character(label)
+def change(input_text, option):
     
-    tokenized_input = tokenizer(input_text, return_tensors='pt')
-    input_ids = tokenized_input.input_ids.detach().clone()[0]
-    label_ids = tokenizer(label, return_tensors='pt').input_ids.detach().clone()[0]
-    overlap_position = get_label_position(input_ids, label_ids) # DST label과 겹치는 token의 위치
-    mask_arr = torch.zeros(input_ids.shape)
+    # input text의 attention을 구해서
+    # option == 'similar' 라면
+        # attention 값이 크지 않은 단어를 찾고
+        # 그 단어를 <mask> 로 바꾼 뒤
+    # option == 'different'라면
+        # attention이 큰 단어를 찾고
+        # 그 단어를  <mask>로 바꾼 뒤
 
+    # roberta로 mask filling
 
-    if option == 'similar':
-        rand = torch.rand(input_ids.shape) 
-        mask_arr = rand < 0.30 # 전체의 30%를 mask token으로 변경
-        for position in overlap_position: # 그중, label과 겹치는 위치는 mask token으로 바꾸지 않는다.
-            mask_arr[position] = False
-        mask_arr = mask_arr * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
-
-
-    elif option == 'different':
-        if len(label.strip()) ==0 or len(overlap_position) == 0: # label의 결과가 없거나, label과 input text가 겹치는게 없는 경우 이 대화는 사용하지 않는다.
-            new_text = '-1'
-        else:
-            mask_arr = torch.zeros(input_ids.shape)
-            flag = False
-            for position in overlap_position: # label과 겹치는 위치 중
-                if random.random()<0.5 : # 50%를 mask token으로 변경
-                    flag = True
-                    mask_arr[position] = True
-            if flag == False: # 우연히 하나도 바뀌지 않은 경우
-                mask_arr[random.choice(overlap_position)] = True # 랜덤하게 하나를 골라서 mask token으로 바꿔준다.
-    else:
-        print("wrong option!")
-
-    if new_text != '-1':
-        selection = torch.flatten((mask_arr).nonzero())
-        tokenized_input.input_ids[0,selection] = model_special_tokens['mask'] # true인 부분을 mask token으로 바꿔주고
-        outputs = model(**tokenized_input) # 모델에 넣어서
-        prediction = torch.argmax(outputs.logits, dim = -1) # 결과를 얻는다.
-        new_text = tokenizer.decode(prediction[0]) # masked
-        new_text = new_text.replace('<s>','')
-        new_text = new_text.replace('</s>','')
-        new_text = new_text.replace('\'',' \'')
-        new_text = new_text.replace('.',' .')
-        new_text = new_text.replace('?',' ?')
-        new_text = new_text.replace('!',' !')
-        new_text = new_text.lower()
-
-    if new_text == input_text and option == 'different': # 마스크 추론 결과 기존의 text와 동일하다면, 그리고 option이 different라면 이 케이스는 쓰지 않는다.
-        new_text = '-1'
-        
+    # 이 구조로 저장해야함.!
     new_text = '<sos_u> ' + new_text + ' <eos_u>'
     return new_text
 
@@ -142,6 +107,27 @@ def log_setting():
     return log
     
 
+def load_tokenizer(pretrained_path):
+    tokenizer = T5Tokenizer.from_pretrained(pretrained_path)
+    special_tokens = sos_eos_tokens
+    tokenizer.add_tokens(special_tokens)
+    return tokenizer
+
+
+def load_pretrained_model(pretrained_path, tokenizer):
+    add_special_decoder_token = True
+    cuda_available = torch.cuda.is_available()
+    dropout = 0.1
+    model = T5Gen_Model(pretrained_path, tokenizer, sos_eos_tokens, dropout=dropout, 
+        add_special_decoder_token=add_special_decoder_token, is_training=True)
+
+    if cuda_available:
+        device = torch.device('cuda')
+        model = model.to(device)
+    else:
+        pass
+    return model
+
 
 
 import argparse
@@ -156,9 +142,19 @@ if __name__ == '__main__':
     }
     log.info('seed setting')
     seed_setting(args.seed)
-    
+
+    # Roberta is for mask filling.
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
     model = RobertaForMaskedLM.from_pretrained('roberta-base')
+
+    
+    # T5 model is for get attention.
+    log.info("tokenizer and model load")
+    tokenizer_for_attention = load_tokenizer(args.pretrained_path)
+    model_for_attention =load_pretrained_model(args.pretrained_path, tokenizer_for_attention)
+    
+    model.eval()
+    model_for_attention.eval()
 
     raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-small.json' # 전체 training data
     raw_init_datapath = args.data_path_prefix + 'labeled_init.json' # 10% 사용할 때, 어떤 10%를 사용할 지 정보를 가지고 있는 파일
@@ -198,9 +194,9 @@ if __name__ == '__main__':
             input_text = turn['user']
             label = turn['bspn']
             
-            
-            changed_text_similar = change(tokenizer, model, input_text, label, model_special_tokens, 'similar')
-            changed_text_different = change(tokenizer, model, input_text, label, model_special_tokens, 'different')
+            # TODO : change 함수 만들기!
+            changed_text_similar = change(input_text, 'similar')
+            changed_text_different = change(input_text, 'different')
             
             if changed_text_similar:
                 similar_turn['user_similar'] = changed_text_similar

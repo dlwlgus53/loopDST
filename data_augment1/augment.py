@@ -76,12 +76,20 @@ def change(tokenizer, model, input_text, label, model_special_tokens, option):
 
 
     if option == 'similar':
-        rand = torch.rand(input_ids.shape) 
-        mask_arr = rand < 0.30 # 전체의 30%를 mask token으로 변경
-        for position in overlap_position: # 그중, label과 겹치는 위치는 mask token으로 바꾸지 않는다.
-            mask_arr[position] = False
-        mask_arr = mask_arr * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
-
+        if len(label.strip()) ==0 or len(overlap_position) == 0: # label의 결과가 없거나, label과 input text가 겹치는게 없는 경우 이 대화는 사용하지 않는다.
+            new_text = '-1'
+        else:
+            for p in range(len(mask_arr)):
+                if p not in overlap_position and random.random()<0.3:
+                    mask_arr[p] = True
+            mask_arr = mask_arr * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
+            
+            # rand = torch.rand(input_ids.shape) 
+            # mask_arr = rand < 0.30 # 전체의 30%를 mask token으로 변경
+            # for position in overlap_position: # 그중, label과 겹치는 위치는 mask token으로 바꾸지 않는다.
+            #     mask_arr[position] = False
+            # mask_arr = mask_arr * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
+            
 
     elif option == 'different':
         if len(label.strip()) ==0 or len(overlap_position) == 0: # label의 결과가 없거나, label과 input text가 겹치는게 없는 경우 이 대화는 사용하지 않는다.
@@ -90,11 +98,11 @@ def change(tokenizer, model, input_text, label, model_special_tokens, option):
             mask_arr = torch.zeros(input_ids.shape)
             flag = False
             for position in overlap_position: # label과 겹치는 위치 중
-                if random.random()<0.5 : # 50%를 mask token으로 변경
-                    flag = True
-                    mask_arr[position] = True
-            if flag == False: # 우연히 하나도 바뀌지 않은 경우
-                mask_arr[random.choice(overlap_position)] = True # 랜덤하게 하나를 골라서 mask token으로 바꿔준다.
+                # if random.random()<0.5 : # 50%를 mask token으로 변경
+                #     flag = True
+                mask_arr[position] = True
+            # if flag == False: # 우연히 하나도 바뀌지 않은 경우
+            #     mask_arr[random.choice(overlap_position)] = True # 랜덤하게 하나를 골라서 mask token으로 바꿔준다.
     else:
         print("wrong option!")
 
@@ -175,7 +183,8 @@ if __name__ == '__main__':
     for dial_idx, dial in enumerate(raw_data):
         if dial_idx%30 == 0 and dial_idx !=0:
             print(f'{dial_idx}/{len(raw_data)}')
-            break
+            if dial_idx == 90:
+                break
         similar_dial = []
         different_dial = []
         for turn in dial:
