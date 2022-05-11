@@ -15,7 +15,8 @@ from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
 from transformers import T5Tokenizer
-from dataclass_part import DSTMultiWozData
+from dataclass import nlidata
+from modelling.T5Model import T5Gen_Model
 
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
@@ -114,26 +115,14 @@ def get_optimizers(model, args, specify_adafactor_lr):
     return optimizer, scheduler
 
 def load_model(args, data, cuda_available, load_pretrained = True):
+    add_special_decoder_token = True
     log.info ('Start loading model...')
-    if args.model_name.startswith('facebook/bart'):
-        # load bart model
-        from modelling.BARTModel import BARTGen_Model
-        if args.pretrained_path != 'None' and load_pretrained:
-            model = BARTGen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
-        else:
-            model = BARTGen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
-    elif args.model_name.startswith('t5'):
-        from modelling.T5Model import T5Gen_Model
-        if args.pretrained_path != 'None' and load_pretrained:
-            model = T5Gen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
-        else:
-            model = T5Gen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
+    if args.pretrained_path != 'None' and load_pretrained:
+        model = T5Gen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
+            add_special_decoder_token=add_special_decoder_token, is_training=True)
     else:
-        raise Exception('Wrong Model Type!!!')
+        model = T5Gen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
+            add_special_decoder_token=add_special_decoder_token, is_training=True)
 
     if cuda_available:
         if multi_gpu_training:
