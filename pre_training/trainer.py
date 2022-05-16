@@ -31,12 +31,6 @@ def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_
         if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
         train_batch_src_tensor, train_batch_src_mask, labels = \
         data.parse_batch_tensor(train_batch)
-        if idx %300 ==0:
-            log.info("text")
-            log.info(f'{data.tokenizer.decode(train_batch_src_tensor[0])}')
-            log.info("label")
-            log.info(f'{data.tokenizer.decode(labels[0])}')
-            
             
         if cuda_available:
             train_batch_src_tensor = train_batch_src_tensor.to(device)
