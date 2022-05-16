@@ -60,7 +60,7 @@ class NLIdata:
         # yes/no
         
         if self.add_prefix:
-            bs_prefix_text = 'Do two sentences have the same DST results? (same or different)'
+            bs_prefix_text = 'nli hypothesis (entailment or contradiction) :'
             self.bs_prefix_id = self.tokenizer.convert_tokens_to_ids(tokenizer.tokenize(bs_prefix_text))
         else:
             self.bs_prefix_id = []
@@ -105,7 +105,7 @@ class NLIdata:
                 if turn['user_similar'] == '<sos_u> -1 <eos_u>':continue
                 user = turn['user']
                 user_similar = turn['user_similar']
-                label = 'same'
+                label = 'entailment'
                 merged_list.append(
                     {'user1' : user,
                      'user2' : user_similar,
@@ -117,7 +117,7 @@ class NLIdata:
                 if turn['user_different'] == '<sos_u> -1 <eos_u>':continue
                 user = turn['user']
                 user_different = turn['user_different']
-                label = 'different'
+                label = 'contradiction'
                 merged_list.append(
                     {'user1' : user,
                     'user2' : user_different,

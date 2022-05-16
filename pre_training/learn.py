@@ -243,7 +243,7 @@ if __name__ == '__main__':
         accuracy = evaluate(args, model,data,log,cuda_available, device)
         if accuracy > max_accuracy:
             max_accuracy = accuracy
-            save_str = 'dev_joint_accuracy_{}'.format(round(accuracy,2))
+            save_str = 'dev_joint_accuracy_{}'.format(round(accuracy*100,2))
             save_result(epoch, model, save_str, accuracy)
         log.info ('In the epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(epoch, round(accuracy, 2), round(max_accuracy, 2)))
         
