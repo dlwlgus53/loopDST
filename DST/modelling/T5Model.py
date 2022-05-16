@@ -30,6 +30,20 @@ class T5Gen_Model(nn.Module):
         outputs = self.model(input_ids=src_input, attention_mask=src_mask, decoder_input_ids=tgt_input, labels=tgt_output)
         loss = outputs[0]#.mean()
         return loss
+
+    def classification(self, src_input, src_mask, labels):
+        src_mask = src_mask.type(src_input.type())
+        outputs = self.model(input_ids=src_input, attention_mask=src_mask, labels=labels)
+        loss = outputs[0]#.mean()
+        return loss
+    
+    def classification_generate(self, src_input, src_mask):
+        src_mask = src_mask.type(src_input.type())
+        outputs = self.model.generate(input_ids=src_input, attention_mask = src_mask)
+        output_result = []
+        for output in outputs:
+            output_result.append(self.tokenizer.decode(output).replace("<pad>", "").strip())
+        return output_result
     
     def tagging(self, src_input, src_mask):
         generate_mode = 'bs'

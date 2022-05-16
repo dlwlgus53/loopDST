@@ -2,6 +2,7 @@ data/multiwoz/data/
 data/multiwoz/utils/
 DST/ckpt
 DST/__pycache__/
+pre_training/ckpt/
 *.out
 *.json
 *.sh

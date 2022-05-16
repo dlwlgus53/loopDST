@@ -6,7 +6,6 @@ import torch
 import random
 import argparse
 import operator
-import progressbar
 import torch.nn as nn
 from torch.optim import Adam
 from operator import itemgetter

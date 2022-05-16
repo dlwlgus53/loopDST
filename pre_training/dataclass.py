@@ -7,36 +7,26 @@ import numpy as np
 import json
 from torch.nn.utils import rnn
 import progressbar
-import ontology
 import random
 from torch.nn.utils import rnn
 import logging
 import logging.handlers
 import copy
 import time
+from transformers import T5Config
+import json
 
 
+all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
+all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
+sos_eos_tokens = ['<_PAD_>', '<go_r>', '<go_b>', '<go_a>', '<eos_u>', '<eos_r>', '<eos_b>', 
+                '<eos_a>', '<go_d>','<eos_d>', '<sos_u>', '<sos_r>', '<sos_b>', '<sos_a>', '<sos_d>', 
+                '<sos_db>', '<eos_db>', '<sos_context>', '<eos_context>']
+class NLIdata:
+    def __init__(self, model_name, tokenizer, data_path_prefix,  ckpt_save_path, \
+        add_prefix=True, add_special_decoder_token=True):
 
-class DSTMultiWozData:
-    def __init__(self, model_name, tokenizer, data_path_prefix, ckpt_save_path, log_path, tagging_all = False, shuffle_mode='shuffle_session_level', 
-        add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0,  debugging = False):
-        
-
-        log = logging.getLogger('log in data')
-        log.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
-
-        fileHandler = logging.FileHandler(log_path)
-        streamHandler = logging.StreamHandler()
-
-        fileHandler.setFormatter(formatter)
-        streamHandler.setFormatter(formatter)
-
-        log.addHandler(fileHandler)
-        log.addHandler(streamHandler)
-        
-        self.log = log
-        self.tagging_all = tagging_all
+        self.log = self.set_log("./log.txt")
         self.add_prefix = add_prefix
         assert self.add_prefix in [True, False]
         self.add_special_decoder_token = add_special_decoder_token
@@ -50,7 +40,6 @@ class DSTMultiWozData:
         self.eos_context_token_id = self.tokenizer.convert_tokens_to_ids(['<eos_context>'])[0]
         self.model_name = model_name
         assert self.model_name.startswith('t5')
-        from transformers import T5Config
         t5config = T5Config.from_pretrained(model_name)
         self.bos_token_id = t5config.decoder_start_token_id
         self.eos_token_id = self.tokenizer.eos_token_id
@@ -66,78 +55,96 @@ class DSTMultiWozData:
             one_id = self.tokenizer.convert_tokens_to_ids([token])[0]
             self.all_eos_token_id_list.append(one_id)
             
-        # TODO : shoud I change?
+        # Change to propoer one..    
+        # 이 대화에서 호텔, 정보가 일치하는가?
+        # yes/no
+        
         if self.add_prefix:
-            bs_prefix_text = 'translate dialogue to belief state:'
+            bs_prefix_text = 'Do two sentences have the same DST results? (same or different)'
             self.bs_prefix_id = self.tokenizer.convert_tokens_to_ids(tokenizer.tokenize(bs_prefix_text))
         else:
             self.bs_prefix_id = []
+
+
         
         self.data_path_prefix = data_path_prefix 
         self.ckpt_save_path = ckpt_save_path 
-        import json
-        self.debugging = debugging
         
-        similar_data_path = data_path_prefix + '/labeled_init.json'
-        different_data_path = data_path_prefix + '/labeled_init.json'
-
-        # 두 파일을 합치고
-        # 적절히 섞는다.
-        # Train, valid, test 만든다.
-                                
-        if data_mode == 'train':
-            train_data_id_list = self.tokenize_raw_data(train_raw_data) # give labled data list too
-            self.train_data_list = self.flatten_data(train_data_id_list)
-            # record training data
-            self.train_id2session_dict = {}
-            self.train_dial_id_list = []
-            for item in self.train_data_list:
-                one_item_id = item['dial_id']
-                try:
-                    self.train_id2session_dict[one_item_id].append(item)
-                except KeyError:
-                    self.train_dial_id_list.append(one_item_id)
-                    self.train_id2session_dict[one_item_id] = [item]
-            assert len(self.train_dial_id_list) == len(self.train_id2session_dict)
-            self.train_num = len(self.train_data_list) 
-        elif data_mode == 'test':
-            train_raw_data = []
-        else:
-            raise Exception('Wrong Data Mode!!!')
-
-        dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
-        if self.debugging : dev_json_path = data_path_prefix + '/multiwoz-fine-processed-small_dev.json' 
+        similar_data_path = data_path_prefix + 'similar.json'
+        different_data_path = data_path_prefix + 'different.json'
         
-        with open(dev_json_path) as f:
-            dev_raw_data = json.load(f)
-            time.sleep(3)
-        self.log.info ('Tokenizing raw dev data...')
-        dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
-        self.dev_data_list = self.flatten_data(dev_data_id_list)
-
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
-        if self.debugging : test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json' 
         
-        with open(test_json_path) as f:
-            test_raw_data = json.load(f)
-            time.sleep(3)
-        self.log.info ('Tokenizing raw test data...')
-        test_data_id_list = self.tokenize_raw_data(test_raw_data)
-        self.test_data_list = self.flatten_data(test_data_id_list)
 
-        self.log.info ('The size of raw train, dev ,test%d, %d, and %d' % \
-            (len(train_raw_data), len(dev_raw_data), len(test_raw_data)))
+        with open(similar_data_path) as f:
+            similar_data = json.load(f)
+            
+        with open(different_data_path) as f:
+            different_data = json.load(f)
+            
+        merged_data=self.merge_files(similar_data, different_data, shuffle = True)
+        raw_train_data, raw_dev_data, raw_test_data = self.train_dev_test_split(merged_data)    
+        self.train_data = self.tokenize_and_to_id(raw_train_data) 
+        self.dev_data = self.tokenize_and_to_id(raw_dev_data) 
+        self.test_data = self.tokenize_and_to_id(raw_test_data) 
+        
+        self.train_num = len(self.train_data)
+        self.dev_num = len(self.dev_data)
+        self.test_num = len(self.test_data)
 
-        self.dev_num, self.test_num= len(self.dev_data_list), len(self.test_data_list)
-        if data_mode == 'train':
-            self.log.info ('train turn number is %d, dev turn number is %d, test turn number is %d ' % \
-                (len(self.train_data_list), len(self.dev_data_list), len(self.test_data_list)))
-            self.shuffle_mode = shuffle_mode
-            self.ordering_train_data()
-        else:
-            pass
+    def train_dev_test_split(self, merged_data):
+        len_data = len(merged_data)
+        part1 = int(len_data*0.8)
+        part2 = int(len_data*0.9)
+        return merged_data[:part1], merged_data[part1:part2], merged_data[part2:]
+    
+    
+    def merge_files(self, similar_data, different_data, shuffle = True):
+        merged_list = []
+        for dial in similar_data:
+            for turn in dial:
+                if turn['user_similar'] == '<sos_u> -1 <eos_u>':continue
+                user = turn['user']
+                user_similar = turn['user_similar']
+                label = 'same'
+                merged_list.append(
+                    {'user1' : user,
+                     'user2' : user_similar,
+                     'label' : label}
+                )
+                
+        for dial in different_data:
+            for turn in dial:
+                if turn['user_different'] == '<sos_u> -1 <eos_u>':continue
+                user = turn['user']
+                user_different = turn['user_different']
+                label = 'different'
+                merged_list.append(
+                    {'user1' : user,
+                    'user2' : user_different,
+                    'label' : label
+                    }
+                )
+                
+        if shuffle:
+            random.shuffle(merged_list)
+            
+        return merged_list
+                
+    def set_log(self,log_path):
+        log = logging.getLogger('log in data')
+        log.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
 
+        fileHandler = logging.FileHandler(log_path)
+        streamHandler = logging.StreamHandler()
 
+        fileHandler.setFormatter(formatter)
+        streamHandler.setFormatter(formatter)
+
+        log.addHandler(fileHandler)
+        log.addHandler(streamHandler)
+        return log
+    
     def replace_sos_eos_token_id(self, token_id_list):
         if self.add_special_decoder_token: # if adding special decoder tokens, then no replacement
             sos_token_id_list = []
@@ -156,38 +163,20 @@ class DSTMultiWozData:
                 res_token_id_list.append(one_id)
         return res_token_id_list
 
-    def tokenize_raw_data(self, raw_data_list, replace_to_labeled_answer = False): # TODO also get labeld data list and answer
-        data_num = len(raw_data_list)
-        if self.use_progress:
+    def tokenize_and_to_id(self, raw_data):
         all_session_list = []
-        for idx in range(data_num):
-            one_sess_list = []
-            for turn in raw_data_list[idx]: # TODO : also should be labeled list
-                one_turn_dict = {}
-                for key in turn:
-                    if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db']:
-                        one_turn_dict[key] = turn[key]
-                    else: # TODO in case of original data, use same, if not, use labeld dataset file
-                        # only tokenize ["user", "usdx", "resp", "bspn", "bsdx", "bspn_reform", "bsdx_reform"]
-                        value_text = turn[key]
-                        if key == 'bspn' and replace_to_labeled_answer == True :
-                            dial_turn_idx = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
-                            try:
-                                value_text = self.labeled_data[dial_turn_idx]
-                            except:
-                                value_text = ''
-                        value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
-                        value_id = self.replace_sos_eos_token_id(value_id)
-                        one_turn_dict[key] = value_id
-
-                one_sess_list.append(one_turn_dict)
-            all_session_list.append(one_sess_list)
-        if self.use_progress: p.finish()
-        assert len(all_session_list) == len(raw_data_list)
+        for turn in raw_data: 
+            one_turn_dict = {}
+            for key in turn:
+            
+                value_text = turn[key]
+                value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
+                value_id = self.replace_sos_eos_token_id(value_id)
+                one_turn_dict[key] = value_id
+            one_turn_dict['input'] = self.bs_prefix_id + one_turn_dict['user1'] +  one_turn_dict['user2'] 
+            all_session_list.append(one_turn_dict)
         return all_session_list
 
-    def shuffle_train_data(self):
-        random.shuffle(self.train_data_list)
 
     def tokenized_decode(self, token_id_list):
         pred_tokens = self.tokenizer.convert_ids_to_tokens(token_id_list)
@@ -217,91 +206,35 @@ class DSTMultiWozData:
             make a dict of special tokens
         """
         special_tokens = []
-        special_tokens = ontology.sos_eos_tokens
-        # self.log.info (special_tokens)
-        #self.log.info (special_tokens)
+        special_tokens = sos_eos_tokens
+
         self.tokenizer.add_tokens(special_tokens)
         return special_tokens
 
-    def flatten_data(self, data):
 
-        data_list = []
-        for session in data: # session is dial
-            one_dial_id = session[0]['dial_id']
-            turn_num = len(session)
-            previous_context = [] # previous context contains all previous user input and system response
-            for turn_id in range(turn_num):
-                curr_turn = session[turn_id]
-                assert curr_turn['turn_num'] == turn_id # the turns should be arranged in order
-                curr_user_input = curr_turn['user']
-                curr_sys_resp = curr_turn['resp']
-                curr_bspn = curr_turn['bspn']
-                # construct belief state data
-                # -900 menas get from last character - 900
-                bs_input = previous_context + curr_user_input
-                bs_input = self.bs_prefix_id + [self.sos_context_token_id] + bs_input[-900:] + [self.eos_context_token_id]
-                bs_output = curr_bspn
-
-                data_list.append({'dial_id': one_dial_id,
-                    'turn_num': turn_id,
-                    'prev_context':previous_context,
-                    'user': curr_turn['user'],
-                    'usdx': curr_turn['usdx'],
-                    'resp': curr_sys_resp,
-                    'bspn': curr_turn['bspn'],
-                    'bspn_reform': curr_turn['bspn_reform'],
-                    'bsdx': curr_turn['bsdx'],
-                    'bsdx_reform': curr_turn['bsdx_reform'],
-                    'bs_input': bs_input,
-                    'bs_output': bs_output
-                    })
-                # update context for next turn
-                previous_context = previous_context + curr_user_input + curr_sys_resp
-        return data_list
-        
     def build_iterator(self, batch_size, mode ):
-        batch_list, idx_list = self.get_batches(batch_size, mode)
-        for batch, idx in zip(batch_list, idx_list):
-            yield batch, idx
+        batch_list= self.get_batches(batch_size, mode)
+        for batch in batch_list:
+            yield batch
             
     def get_batches(self, batch_size, mode): # 여기서 전부다 합친다음 배치사이즈만큼 미리 쪼갠다!
+        batch_list = []
+
         if mode == 'train':
-            batch_list = []
-            idx_list = []
-            all_data_list = self.train_data_list
+            all_data_list = self.train_data
         elif mode == 'valid':
-            batch_list = []
-            idx_list = []
-            all_data_list = self.train_data_list
+            all_data_list = self.dev_data
         elif mode == 'test':
-            batch_list = []
-            idx_list = []
-            all_data_list = self.train_data_list
+            all_data_list = self.test_data
 
-        all_input_data_list, all_output_data_list, all_index_list = [], [], []
+        all_input_data_list, all_output_data_list = [], []
+
         for item in all_data_list:
-            dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
-            if dial_turn_key not in self.labeled_data.keys() and mode == 'train_loop':
-                continue
-            if dial_turn_key in self.labeled_data.keys() and mode == 'tagging'\
-                and not self.tagging_all:
-                continue
-
-            one_input_data_list = []
-            for key in ['bs_input']:
-                one_input_data_list.append(item[key])
-            all_input_data_list.extend(one_input_data_list)
-
-            one_output_data_list = []
-            for key in ['bs_output']:
-                one_output_data_list.append(item[key])
-            all_output_data_list.extend(one_output_data_list)
-            all_index_list.append(dial_turn_key)
+            all_input_data_list.append(item['input'])
+            all_output_data_list.append(item['label'])
         
         data_num = len(all_input_data_list)
         batch_num = int(data_num/batch_size) + 1
-        self.train_num = data_num
-        
 
         for i in range(batch_num):
             start_idx, end_idx = i*batch_size, (i+1)*batch_size
@@ -312,16 +245,13 @@ class DSTMultiWozData:
             for idx in range(start_idx, end_idx):
                 one_input_batch_list.append(all_input_data_list[idx])
                 one_output_batch_list.append(all_output_data_list[idx])
-                one_index_list.append(all_index_list[idx])
                 
             one_batch = [one_input_batch_list, one_output_batch_list]
-            one_idx = one_index_list
             batch_list.append(one_batch)
-            idx_list.append(one_idx)
-
-        
-        return batch_list, idx_list
-
+            
+            
+            
+        return batch_list
             
 
 
@@ -337,14 +267,13 @@ class DSTMultiWozData:
         batch_tgt_tensor, _ = self.pad_batch(batch_tgt_id_list) # padded target sequence
         batch_tgt_input_tensor = batch_tgt_tensor[:, :-1].clone()
         batch_tgt_output_tensor = batch_tgt_tensor[:, 1:].clone()
-        return batch_tgt_input_tensor, batch_tgt_output_tensor
+        return label
 
     def parse_batch_tensor(self, batch):
         batch_input_id_list, batch_output_id_list = batch
         batch_src_tensor, batch_src_mask = self.pad_batch(batch_input_id_list)
-        batch_input, batch_labels = self.process_output(batch_output_id_list)
-        batch_labels[batch_labels[:, :] == self.pad_token_id] = -100
-        return batch_src_tensor, batch_src_mask, batch_input, batch_labels
+        label, _ = self.pad_batch(batch_output_id_list)
+        return batch_src_tensor, batch_src_mask, label
 
     def remove_sos_eos_token(self, text):
         token_list = text.split()

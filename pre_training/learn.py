@@ -1,10 +1,7 @@
-# model load (t5)
-# load dataset -> entailment, not
-# train in here
-# save
-
 import os
 import sys, pdb
+sys.path.append('../DST')
+from modelling.T5Model import T5Gen_Model
 import json
 import torch
 import random
@@ -15,14 +12,13 @@ from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
 from transformers import T5Tokenizer
-from dataclass import nlidata
-from modelling.T5Model import T5Gen_Model
+from dataclass import NLIdata
 
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
 import logging.handlers
 import copy
-from trainer_part import tagging, train, evaluate
+from trainer import train, evaluate
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -117,13 +113,8 @@ def get_optimizers(model, args, specify_adafactor_lr):
 def load_model(args, data, cuda_available, load_pretrained = True):
     add_special_decoder_token = True
     log.info ('Start loading model...')
-    if args.pretrained_path != 'None' and load_pretrained:
-        model = T5Gen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-            add_special_decoder_token=add_special_decoder_token, is_training=True)
-    else:
-        model = T5Gen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-            add_special_decoder_token=add_special_decoder_token, is_training=True)
-
+    model = T5Gen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
+        add_special_decoder_token=add_special_decoder_token, is_training=True)
     if cuda_available:
         if multi_gpu_training:
             model = nn.DataParallel(model) # multi-gpu training
@@ -228,20 +219,9 @@ if __name__ == '__main__':
     
     assert args.model_name.startswith('t5')
 
-    if args.pretrained_path != 'None':
-        log.info (f'Loading Pretrained Tokenizer... {args.pretrained_path}')
-        tokenizer = T5Tokenizer.from_pretrained(args.pretrained_path)
-    else:
-        log.info ('Loading from internet {args.model_name}')
-        tokenizer = T5Tokenizer.from_pretrained(args.model_name)
-
-    if args.add_prefix == 'True':
-        add_prefix = True
-    elif args.add_prefix == 'False':
-        add_prefix = False
-    else:
-        raise Exception('Wrong Prefix Mode!!!')
-
+    log.info (f'Load tokenizer from internet {args.model_name}')
+    tokenizer = T5Tokenizer.from_pretrained(args.model_name)
+    add_prefix = True
 
     if args.specify_adafactor_lr == 'True':
         specify_adafactor_lr = True
@@ -252,25 +232,20 @@ if __name__ == '__main__':
 
     log.info('Initialize dataclass')
     
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, tagging_all = args.tagging_all, \
-        log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
-        data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
+    data = NLIdata( args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path)
 
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
-    min_dev_loss = 1e10
-    max_dev_score, max_dev_str = 0., ''
+    max_accuracy = float("-inf")  
     for epoch in range(args.epoch_num):
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         train_loss = train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
-        all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
-        if dev_score > mini_best_result:
-            model = student
-            one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
-            mini_best_str = one_dev_str
-            mini_best_result = dev_score
-            save_result(epoch, model, mini_best_str, mini_best_result)
-            log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
+        accuracy = evaluate(args, model,data,log,cuda_available, device)
+        if accuracy > max_accuracy:
+            max_accuracy = accuracy
+            save_str = 'dev_joint_accuracy_{}'.format(round(accuracy,2))
+            save_result(epoch, model, save_str, accuracy)
+        log.info ('In the epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(epoch, round(accuracy, 2), round(max_accuracy, 2)))
         
 
 
