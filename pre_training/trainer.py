@@ -91,7 +91,7 @@ def evaluate(args, model,data,log, cuda_available, device):
                 log.info("text")
                 log.info(f'{data.tokenizer.decode(src_tensor[0])}')
                 log.info("label")
-                log.info(f'{data.tokenizer.decode(labels[0])}')
+                log.info(data.remove_sos_eos_token(data.tokenizer.decode(labels[0])))
                 log.info("predict")
                 log.info(data.remove_sos_eos_token(output_results[0]))
             
