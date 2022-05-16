@@ -98,7 +98,8 @@ def evaluate(args, model,data,log, cuda_available, device):
             
             for label_idx, output in enumerate(output_results):
                 all_number +=1
-                if data.remove_sos_eos_token(output) == data.tokenizer.decode(labels[label_idx]):
+                if data.remove_sos_eos_token(output) == \
+                    data.remove_sos_eos_token(data.tokenizer.decode(labels[label_idx])):
                     correct +=1
                            
     
