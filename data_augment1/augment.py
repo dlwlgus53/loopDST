@@ -193,7 +193,7 @@ if __name__ == '__main__':
     
     for dial_idx, dial in enumerate(raw_data):
         if dial_idx%30 == 0 and dial_idx !=0:
-            print(f'{dial_idx}/{len(raw_data)}')
+            log.info(f'{dial_idx}/{len(raw_data)}')
             # if dial_idx == 90:
             #     break
         similar_dial = []
