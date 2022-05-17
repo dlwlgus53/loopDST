@@ -179,7 +179,7 @@ if __name__ == '__main__':
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
     model = RobertaForMaskedLM.from_pretrained('roberta-base')
 
-    raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-small.json' # 전체 training data
+    raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-train.json' # 전체 training data
     raw_init_datapath = args.data_path_prefix + 'labeled_init.json' # 10% 사용할 때, 어떤 10%를 사용할 지 정보를 가지고 있는 파일
     
     with open(raw_init_datapath) as f:
