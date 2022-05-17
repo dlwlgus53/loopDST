@@ -12,6 +12,7 @@ import numpy as np
 import logging.handlers
 from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
 from transformers import pipeline
+import copy
 
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
@@ -33,6 +34,7 @@ def parse_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
     parser.add_argument('--seed', type=int ,default = 1, help='The path where the data stores.')
+    parser.add_argument('--topn', type=int ,default = 5, help='how many samples will make')
     
     return parser.parse_args()
 
@@ -63,6 +65,21 @@ def get_label_position(input_ids, label_ids):
     return overlap_index
 
 
+def mask_to_text(tokenizer, mask_arr, tokenized_input):
+    selection = torch.flatten((mask_arr).nonzero())
+    tokenized_input.input_ids[0,selection] = model_special_tokens['mask'] # true인 부분을 mask token으로 바꿔주고
+    outputs = model(**tokenized_input) # 모델에 넣어서
+    prediction = torch.argmax(outputs.logits, dim = -1) # 결과를 얻는다.
+    new_text = tokenizer.decode(prediction[0]) # masked
+    new_text = new_text.replace('<s>','')
+    new_text = new_text.replace('</s>','')
+    new_text = new_text.replace('\'',' \'')
+    new_text = new_text.replace('.',' .')
+    new_text = new_text.replace('?',' ?')
+    new_text = new_text.replace('!',' !')
+    new_text = new_text.lower()
+    return new_text
+
 def change(tokenizer, model, input_text, label, model_special_tokens, option):
     new_text = ''
     input_text = remove_special_character(input_text)
@@ -79,52 +96,46 @@ def change(tokenizer, model, input_text, label, model_special_tokens, option):
         if len(label.strip()) ==0 or len(overlap_position) == 0: # label의 결과가 없거나, label과 input text가 겹치는게 없는 경우 이 대화는 사용하지 않는다.
             new_text = '-1'
         else:
+                
             for p in range(len(mask_arr)):
-                if p not in overlap_position and random.random()<0.3:
+                random_num = random.random()
+                if p not in overlap_position and random_num<0.5:
                     mask_arr[p] = True
+            
             mask_arr = mask_arr * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
-            
-            # rand = torch.rand(input_ids.shape) 
-            # mask_arr = rand < 0.30 # 전체의 30%를 mask token으로 변경
-            # for position in overlap_position: # 그중, label과 겹치는 위치는 mask token으로 바꾸지 않는다.
-            #     mask_arr[position] = False
-            # mask_arr = mask_arr * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
-            
-
+            new_text = mask_to_text(tokenizer, mask_arr, tokenized_input)
+    
     elif option == 'different':
         if len(label.strip()) ==0 or len(overlap_position) == 0: # label의 결과가 없거나, label과 input text가 겹치는게 없는 경우 이 대화는 사용하지 않는다.
             new_text = '-1'
         else:
             mask_arr = torch.zeros(input_ids.shape)
-            flag = False
+            mask_arr2 = torch.zeros(input_ids.shape)
+
             for position in overlap_position: # label과 겹치는 위치 중
-                # if random.random()<0.5 : # 50%를 mask token으로 변경
-                #     flag = True
+                # random_num = random.random()
+                # if random_num < 1.0:
                 mask_arr[position] = True
-            # if flag == False: # 우연히 하나도 바뀌지 않은 경우
-            #     mask_arr[random.choice(overlap_position)] = True # 랜덤하게 하나를 골라서 mask token으로 바꿔준다.
+
+            new_text = mask_to_text(tokenizer, mask_arr, tokenized_input)
+            new_text.replace("centre","center")
+
+            for p in range(len(mask_arr2)):
+                random_num = random.random()
+                if p not in overlap_position and random_num<0.3:
+                    mask_arr2[p] = True
+            mask_arr2 = mask_arr2 * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
+            new_text = mask_to_text(tokenizer, mask_arr2, tokenized_input)
+
     else:
         print("wrong option!")
-
-    if new_text != '-1':
-        selection = torch.flatten((mask_arr).nonzero())
-        tokenized_input.input_ids[0,selection] = model_special_tokens['mask'] # true인 부분을 mask token으로 바꿔주고
-        outputs = model(**tokenized_input) # 모델에 넣어서
-        prediction = torch.argmax(outputs.logits, dim = -1) # 결과를 얻는다.
-        new_text = tokenizer.decode(prediction[0]) # masked
-        new_text = new_text.replace('<s>','')
-        new_text = new_text.replace('</s>','')
-        new_text = new_text.replace('\'',' \'')
-        new_text = new_text.replace('.',' .')
-        new_text = new_text.replace('?',' ?')
-        new_text = new_text.replace('!',' !')
-        new_text = new_text.lower()
 
     if new_text == input_text and option == 'different': # 마스크 추론 결과 기존의 text와 동일하다면, 그리고 option이 different라면 이 케이스는 쓰지 않는다.
         new_text = '-1'
         
+    masked = tokenizer.decode(tokenized_input.input_ids[0])
     new_text = '<sos_u> ' + new_text + ' <eos_u>'
-    return new_text
+    return masked, new_text
 
     
 def makedirs(path): 
@@ -184,7 +195,7 @@ if __name__ == '__main__':
         if dial_idx%30 == 0 and dial_idx !=0:
             print(f'{dial_idx}/{len(raw_data)}')
             # if dial_idx == 90:
-            #     breaks
+            #     break
         similar_dial = []
         different_dial = []
         for turn in dial:
@@ -207,17 +218,21 @@ if __name__ == '__main__':
             input_text = turn['user']
             label = turn['bspn']
             
-            
-            changed_text_similar = change(tokenizer, model, input_text, label, model_special_tokens, 'similar')
-            changed_text_different = change(tokenizer, model, input_text, label, model_special_tokens, 'different')
-            
-            if changed_text_similar:
-                similar_turn['user_similar'] = changed_text_similar
-            if changed_text_different:
-                different_turn['user_different'] = changed_text_different
+            for n in range(args.topn):
+                random.seed(n)
+                masked_text_sim, changed_text_similar = change(tokenizer, model, input_text, label, model_special_tokens, 'similar')
+                masked_text_dif, changed_text_different = change(tokenizer, model, input_text, label, model_special_tokens, 'different')
                 
-            similar_dial.append(similar_turn)
-            different_dial.append(different_turn)
+                if changed_text_similar:
+                    similar_turn['user_similar'] = changed_text_similar
+                    similar_turn['masked'] = masked_text_sim
+                    
+                if changed_text_different:
+                    different_turn['user_different'] = changed_text_different
+                    different_turn['masked'] = masked_text_dif
+                    
+                similar_dial.append(copy.deepcopy(similar_turn))
+                different_dial.append(copy.deepcopy(different_turn))
         raw_data_similar.append(similar_dial)
         raw_data_different.append(different_dial)
 
