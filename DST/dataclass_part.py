@@ -86,14 +86,10 @@ class DSTMultiWozData:
         for token in all_sos_token_list:
             one_id = self.tokenizer.convert_tokens_to_ids([token])[0]
             self.all_sos_token_id_list.append(one_id)
-        #     self.log.info (self.tokenizer.convert_ids_to_tokens([one_id]))
-        # self.log.info (len(self.all_sos_token_id_list))
         self.all_eos_token_id_list = []
         for token in all_eos_token_list:
             one_id = self.tokenizer.convert_tokens_to_ids([token])[0]
             self.all_eos_token_id_list.append(one_id)
-        #     self.log.info (self.tokenizer.convert_ids_to_tokens([one_id]))
-        # self.log.info (len(self.all_eos_token_id_list))
 
         if self.add_prefix:
             bs_prefix_text = 'translate dialogue to belief state:'

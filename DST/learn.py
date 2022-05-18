@@ -10,6 +10,25 @@ from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
+import logging
+import logging.handlers
+
+
+def log_setting(args):
+    log = logging.getLogger('my_log')
+    log.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
+    
+    fileHandler = logging.FileHandler(f'{args.ckpt_save_path}/log.txt')
+    streamHandler = logging.StreamHandler()
+
+    fileHandler.setFormatter(formatter)
+    streamHandler.setFormatter(formatter)
+
+    log.addHandler(fileHandler)
+    log.addHandler(streamHandler)
+    return log
+
 
 
 def init_experiment(args):
@@ -86,16 +105,16 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
     ]
     overall_batch_size = args.number_of_gpu * args.batch_size_per_gpu * args.gradient_accumulation_steps
     num_training_steps = train_num * args.epoch_num // overall_batch_size
-    print ('----------')
+    log.info ('----------')
     if optimizer_name == 'adam':
-        print ('Use Adam Optimizer for Training.')
+        log.info ('Use Adam Optimizer for Training.')
         optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=num_training_steps)
     elif optimizer_name == 'adafactor':
         from transformers.optimization import Adafactor, AdafactorSchedule
-        print ('Use Adafactor Optimizer for Training.')
+        log.info ('Use Adafactor Optimizer for Training.')
         if specify_adafactor_lr:
-            print ('Specific learning rate.')
+            log.info ('Specific learning rate.')
             optimizer = Adafactor(
                 optimizer_grouped_parameters,
                 lr=1e-3,
@@ -110,7 +129,7 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
             )
             scheduler = None
         else:
-            print ('Do not specific learning rate.')
+            log.info ('Do not specific learning rate.')
             optimizer = Adafactor(optimizer_grouped_parameters, 
                 scale_parameter=True, 
                 relative_step=True, 
@@ -119,35 +138,49 @@ def get_optimizers(model, args, train_num, optimizer_name, specify_adafactor_lr)
             scheduler = AdafactorSchedule(optimizer)
     else:
         raise Exception('Wrong Optimizer Name!!!')
-    print ('----------')
+    log.info ('----------')
     return optimizer, scheduler
 
+def makedirs(path): 
+   try: 
+        os.makedirs(path) 
+   except OSError: 
+       if not os.path.isdir(path): 
+           raise
+       
+       
 import argparse
 if __name__ == '__main__':
+    
+    args = parse_config()
+    makedirs(args.ckpt_save_path)
+    log = log_setting(args)
+    
+    
     if torch.cuda.is_available():
-        print ('Cuda is available.')
+        log.info ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
     multi_gpu_training = False
     if cuda_available:
         if torch.cuda.device_count() > 1:
             multi_gpu_training = True
-            print ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
+            log.info ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
         else:
-            print ('Using single GPU training.')
+            log.info ('Using single GPU training.')
     else:
         pass
  
     args = parse_config()
-    print(args)
+    log.info(args)
     device = torch.device('cuda')
     
-    print('seed setting')
+    log.info('seed setting')
     init_experiment(args)
-    print ('Start loading data...')
+    log.info ('Start loading data...')
     assert args.model_name.startswith('t5')
     from transformers import T5Tokenizer
     if args.pretrained_path != 'None':
-        print ('Loading Pretrained Tokenizer...')
+        log.info ('Loading Pretrained Tokenizer...')
         tokenizer = T5Tokenizer.from_pretrained(args.pretrained_path)
     else:
         tokenizer = T5Tokenizer.from_pretrained(args.model_name)
@@ -177,7 +210,7 @@ if __name__ == '__main__':
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
                           data_mode='train', train_data_ratio=args.train_data_ratio)
 
-    print ('Start loading model...')
+    log.info ('Start loading model...')
     if args.model_name.startswith('facebook/bart'):
         # load bart model
         from modelling.BARTModel import BARTGen_Model
@@ -206,7 +239,7 @@ if __name__ == '__main__':
         model = model.to(device)
     else:
         pass
-    print ('Model loaded')
+    log.info ('Model loaded')
 
     optimizer, scheduler = get_optimizers(model, args, data.train_num, args.optimizer_name, specify_adafactor_lr)
     optimizer.zero_grad()
@@ -216,15 +249,15 @@ if __name__ == '__main__':
     for epoch in range(args.epoch_num):
         model.train()
         # --- training --- #
-        print ('-----------------------------------------')
-        print ('Start training at epoch %d' % epoch)
+        log.info ('-----------------------------------------')
+        log.info ('Start training at epoch %d' % epoch)
         train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
         train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
         p_train_idx = 0
         epoch_step, train_loss = 0, 0.
         for train_idx, train_batch in enumerate(train_iterator):
             if train_idx %100 == 0:
-                print(f'{train_idx*100/train_batch_num_per_epoch:.2f}% done')
+                log.info(f'{train_idx*100/train_batch_num_per_epoch:.2f}% done')
                 
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
@@ -252,8 +285,8 @@ if __name__ == '__main__':
                     pass
                 optimizer.zero_grad()
         train_loss = train_loss / train_batch_num_per_epoch
-        print ('At epoch %d, total update steps is %d, the total training loss is %5f' % (epoch, epoch_step, train_loss))
-        print ('++++++++++++++++++++++++++++++++++++++++++')
+        log.info ('At epoch %d, total update steps is %d, the total training loss is %5f' % (epoch, epoch_step, train_loss))
+        log.info ('++++++++++++++++++++++++++++++++++++++++++')
         # **********************************************************************
         # --- evaluation --- #
 
@@ -267,18 +300,18 @@ if __name__ == '__main__':
         #     pass
 
         from inference_utlis import batch_generate
-        print ('Start evaluation at epoch %d' % epoch)
+        log.info ('Start evaluation at epoch %d' % epoch)
         model.eval()
         with torch.no_grad():
             dev_batch_list = \
             data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.eval_batch_size_per_gpu, eva_mode='dev')
             dev_batch_num_per_epoch = len(dev_batch_list)
             # p = progressbar.ProgressBar(dev_batch_num_per_epoch)
-            print ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
+            log.info ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
             all_dev_result = []
             for p_dev_idx in range(dev_batch_num_per_epoch):
                 if p_dev_idx %50 == 0:
-                    print(f'{p_dev_idx*100/dev_batch_num_per_epoch:.2f}% done')
+                    log.info(f'{p_dev_idx*100/dev_batch_num_per_epoch:.2f}% done')
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
                 for item in dev_batch_parse_dict:
@@ -291,10 +324,9 @@ if __name__ == '__main__':
             if dev_score > max_dev_score:
                 max_dev_str = one_dev_str
                 max_dev_score = dev_score
-                print ('Saving Model...')
+                log.info ('Saving Model...')
                 model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
 
-                import os
                 if os.path.exists(model_save_path):
                     pass
                 else: # recursively construct directory
@@ -333,16 +365,16 @@ if __name__ == '__main__':
                     delete = len(sortedFiles) - max_save_num
                     for x in range(0, delete):
                         one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
-                        print (one_folder_name)
+                        log.info (one_folder_name)
                         os.system('rm -r ' + one_folder_name)
-                print ('-----------------------------------')
+                log.info ('-----------------------------------')
                 # --------------------------------------------------------------------------------------------- #
-            print ('Currnt joint accuracy is {}, best joint accuracy is {}'.format(round(dev_score, 2), round(max_dev_score, 2)))
+            log.info ('Currnt joint accuracy is {}, best joint accuracy is {}'.format(round(dev_score, 2), round(max_dev_score, 2)))
 
-            print ('Current Result: ' + one_dev_str)
-            print ('Best Result: ' + max_dev_str)
+            log.info ('Current Result: ' + one_dev_str)
+            log.info ('Best Result: ' + max_dev_str)
 
-            print ('dev evaluation finished.')
-        print ('-----------------------------------------')
+            log.info ('dev evaluation finished.')
+        log.info ('-----------------------------------------')
         model.train()
 
