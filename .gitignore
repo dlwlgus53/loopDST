@@ -1,5 +1,6 @@
 data/multiwoz/data/
 data/multiwoz/utils/
+pre_training/out
 DST/ckpt
 DST/__pycache__/
 pre_training/ckpt/
