@@ -310,6 +310,7 @@ if __name__ == '__main__':
             student= load_model(args, data, cuda_available,load_pretrained = False)
             
             optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
+            
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
 

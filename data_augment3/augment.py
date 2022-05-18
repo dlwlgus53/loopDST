@@ -8,12 +8,9 @@ import pdb
 import argparse
 import copy
 import logging
-import numpy as np
 import logging.handlers
-from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
-from transformers import pipeline
 import copy
-
+from transformers import T5Tokenizer, T5Config, T5ForConditionalGeneration
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
@@ -35,6 +32,10 @@ def parse_config():
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
     parser.add_argument('--seed', type=int ,default = 1, help='The path where the data stores.')
     parser.add_argument('--topn', type=int ,default = 5, help='how many samples will make')
+    parser.add_argument('--batch_size', type=int ,default = 10, help='batch_size for t5')
+    parser.add_argument('--model_path', type=str ,default = 't5-base', help='batch_size for t5')
+    
+    
     
     return parser.parse_args()
 
@@ -80,7 +81,24 @@ def mask_to_text(tokenizer, mask_arr, tokenized_input):
     new_text = new_text.lower()
     return new_text
 
-def change(tokenizer, model, input_text, label, model_special_tokens, option):
+
+
+def get_similar_mask(overlap_position, input_ids, start_token, end_token):
+    mask_arr = torch.zeros(input_ids.shape)
+    for p in range(len(mask_arr)):
+        random_num = random.random()
+        if p not in overlap_position and random_num<0.5:
+            mask_arr[p] = True
+    mask_arr = mask_arr * (input_ids!= start_token) * (input_ids != end_token) # 시작/끝 토큰도 바꾸지 않는다.
+    return mask_arr
+
+def get_different_mask(overlap_position, input_ids, start_token, end_token):
+    mask_arr = torch.zeros(input_ids.shape)
+    for position in overlap_position: # label과 겹치는 위치 중
+        mask_arr[position] = True
+    return mask_arr
+
+def change(tokenizer, model, input_text, label, option):
     new_text = ''
     input_text = remove_special_character(input_text)
     label = remove_special_character(label)
@@ -89,44 +107,25 @@ def change(tokenizer, model, input_text, label, model_special_tokens, option):
     input_ids = tokenized_input.input_ids.detach().clone()[0]
     label_ids = tokenizer(label, return_tensors='pt').input_ids.detach().clone()[0]
     overlap_position = get_label_position(input_ids, label_ids) # DST label과 겹치는 token의 위치
-    mask_arr = torch.zeros(input_ids.shape)
-
+    pdb.set_trace()
+    start_token = 1
+    end_token =2
 
     if option == 'similar':
         if len(label.strip()) ==0 or len(overlap_position) == 0: # label의 결과가 없거나, label과 input text가 겹치는게 없는 경우 이 대화는 사용하지 않는다.
             new_text = '-1'
         else:
-                
-            for p in range(len(mask_arr)):
-                random_num = random.random()
-                if p not in overlap_position and random_num<0.5:
-                    mask_arr[p] = True
-            
-            mask_arr = mask_arr * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
+            mask_arr =  get_similar_mask()     
             new_text = mask_to_text(tokenizer, mask_arr, tokenized_input)
-    
+            new_text.replace("centre","center")
+            
     elif option == 'different':
         if len(label.strip()) ==0 or len(overlap_position) == 0: # label의 결과가 없거나, label과 input text가 겹치는게 없는 경우 이 대화는 사용하지 않는다.
             new_text = '-1'
         else:
-            mask_arr = torch.zeros(input_ids.shape)
-            mask_arr2 = torch.zeros(input_ids.shape)
-
-            for position in overlap_position: # label과 겹치는 위치 중
-                # random_num = random.random()
-                # if random_num < 1.0:
-                mask_arr[position] = True
-
+            mask_arr = get_different_mask()
             new_text = mask_to_text(tokenizer, mask_arr, tokenized_input)
             new_text.replace("centre","center")
-
-            for p in range(len(mask_arr2)):
-                random_num = random.random()
-                if p not in overlap_position and random_num<0.3:
-                    mask_arr2[p] = True
-            mask_arr2 = mask_arr2 * (input_ids!= model_special_tokens['start']) * (input_ids != model_special_tokens['end']) # 시작/끝 토큰도 바꾸지 않는다.
-            new_text = mask_to_text(tokenizer, mask_arr2, tokenized_input)
-
     else:
         print("wrong option!")
 
@@ -167,18 +166,16 @@ import argparse
 if __name__ == '__main__':
     log = log_setting()
     args = parse_config()
-    model_configuration = RobertaConfig()
-    model_special_tokens = {
-        'mask' : 50264,
-        'start' : 0,
-        'end' : 2
-    }
+
     log.info('seed setting')
     seed_setting(args.seed)
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
     
-    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
-    model = RobertaForMaskedLM.from_pretrained('roberta-base')
+    tokenizer = T5Tokenizer.from_pretrained(args.model_path)
+    config = T5Config.from_pretrained(args.model_path)
+    model = T5ForConditionalGeneration.from_pretrained(args.model_path, config=config).to(DEVICE)
 
+    pdb.set_trace()
     raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-train.json' # 전체 training data
     raw_init_datapath = args.data_path_prefix + 'labeled_init.json' # 10% 사용할 때, 어떤 10%를 사용할 지 정보를 가지고 있는 파일
     
@@ -188,7 +185,6 @@ if __name__ == '__main__':
     with open(raw_datapath) as f:
         raw_data = json.load(f)
     
-    cnt =0
     raw_data_similar = []
     raw_data_different = []
     
@@ -213,16 +209,14 @@ if __name__ == '__main__':
                 'user' : turn['user'],
                 'bspn' : turn['bspn']
             }
-            # similar_turn = copy.deepcopy(turn)
-            # different_turn = copy.deepcopy(turn)
             
             input_text = turn['user']
             label = turn['bspn']
             
             for n in range(args.topn):
                 random.seed(n)
-                masked_text_sim, changed_text_similar = change(tokenizer, model, input_text, label, model_special_tokens, 'similar')
-                masked_text_dif, changed_text_different = change(tokenizer, model, input_text, label, model_special_tokens, 'different')
+                masked_text_sim, changed_text_similar = change(tokenizer, model, input_text, label, 'similar')
+                masked_text_dif, changed_text_different = change(tokenizer, model, input_text, label, 'different')
                 
                 if changed_text_similar:
                     similar_turn['user_similar'] = changed_text_similar
@@ -236,9 +230,6 @@ if __name__ == '__main__':
                 different_dial.append(copy.deepcopy(different_turn))
         raw_data_similar.append(similar_dial)
         raw_data_different.append(different_dial)
-        cnt +=1
-        
-        
         
 
     
@@ -249,4 +240,3 @@ if __name__ == '__main__':
     with open('save/different.json', 'w') as outfile:
         json.dump(raw_data_different, outfile, indent=4)
         
-    log.info(cnt)

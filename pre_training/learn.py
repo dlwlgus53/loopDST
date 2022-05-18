@@ -173,12 +173,12 @@ def save_result(epoch, model, one_dev_str,all_dev_result):
             log.info (one_folder_name)
             os.system('rm -r ' + one_folder_name)
 
-def log_setting():
+def log_setting(args):
     log = logging.getLogger('my_log')
     log.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
     
-    fileHandler = logging.FileHandler(f'log.txt')
+    fileHandler = logging.FileHandler(f'{args.ckpt_save_path}/log.txt')
     streamHandler = logging.StreamHandler()
 
     fileHandler.setFormatter(formatter)
@@ -197,7 +197,10 @@ def makedirs(path):
 
 import argparse
 if __name__ == '__main__':
-    log = log_setting()
+    args = parse_config()
+    makedirs(args.ckpt_save_path)
+    log = log_setting(args)
+    
     if torch.cuda.is_available():
         log.info ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
@@ -211,11 +214,10 @@ if __name__ == '__main__':
     else:
         pass
     
-    args = parse_config()
+
     log.info(args)
     init_experiment(args.seed)
     device = torch.device('cuda')
-    makedirs(args.ckpt_save_path)
     
     assert args.model_name.startswith('t5')
 
@@ -245,7 +247,7 @@ if __name__ == '__main__':
             max_accuracy = accuracy
             save_str = 'dev_joint_accuracy_{}'.format(round(accuracy*100,2))
             save_result(epoch, model, save_str, accuracy)
-        log.info ('In the epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(epoch, round(accuracy, 2), round(max_accuracy, 2)))
+        log.info ('In the epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(epoch, round(accuracy*100, 2), round(max_accuracy*100, 2)))
         
 
 
