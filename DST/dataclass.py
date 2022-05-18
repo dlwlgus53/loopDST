@@ -4,7 +4,6 @@ import random
 import numpy as np
 import json
 from torch.nn.utils import rnn
-import progressbar
 import ontology
 import random
 from torch.nn.utils import rnn
@@ -188,11 +187,9 @@ class DSTMultiWozData:
 
     def tokenize_raw_data(self, raw_data_list): # TODO also get labeld data list and answer
         data_num = len(raw_data_list)
-        p = progressbar.ProgressBar(data_num)
-        p.start()
+        # p = progressbar.ProgressBar(data_num)
         all_session_list = []
         for idx in range(data_num):
-            p.update(idx)
             one_sess_list = []
             for turn in raw_data_list[idx]: # TODO : also should be labeled list
                 one_turn_dict = {}
@@ -207,7 +204,6 @@ class DSTMultiWozData:
                         one_turn_dict[key] = value_id
                 one_sess_list.append(one_turn_dict)
             all_session_list.append(one_sess_list)
-        p.finish()
         assert len(all_session_list) == len(raw_data_list)
         return all_session_list
 

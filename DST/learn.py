@@ -5,7 +5,6 @@ import torch
 import random
 import argparse
 import operator
-import progressbar
 import torch.nn as nn
 from torch.optim import Adam
 from operator import itemgetter
@@ -64,6 +63,7 @@ def parse_config():
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument("--epoch_num", default=60, type=int, help="Total number of training epochs to perform.")
     parser.add_argument("--batch_size_per_gpu", type=int, default=4, help='Batch size for each gpu.')  
+    parser.add_argument("--eval_batch_size_per_gpu", type=int, default=4, help='Batch size for each gpu.')  
     parser.add_argument("--number_of_gpu", type=int, default=8, help="Number of available GPUs.")  
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2, help="gradient accumulation step.")
     parser.add_argument("--ckpt_save_path", type=str, help="directory to save the model parameters.")
@@ -138,6 +138,7 @@ if __name__ == '__main__':
         pass
  
     args = parse_config()
+    print(args)
     device = torch.device('cuda')
     
     print('seed setting')
@@ -219,13 +220,12 @@ if __name__ == '__main__':
         print ('Start training at epoch %d' % epoch)
         train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
         train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
-        p = progressbar.ProgressBar(train_batch_num_per_epoch)
-        p.start()
         p_train_idx = 0
         epoch_step, train_loss = 0, 0.
-        for _, train_batch in enumerate(train_iterator):
-            p.update(p_train_idx)
-            p_train_idx += 1
+        for train_idx, train_batch in enumerate(train_iterator):
+            if train_idx %100 == 0:
+                print(f'{train_idx*100/train_batch_num_per_epoch:.2f}% done')
+                
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
             train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels = \
@@ -251,7 +251,6 @@ if __name__ == '__main__':
                 else:
                     pass
                 optimizer.zero_grad()
-        p.finish()
         train_loss = train_loss / train_batch_num_per_epoch
         print ('At epoch %d, total update steps is %d, the total training loss is %5f' % (epoch, epoch_step, train_loss))
         print ('++++++++++++++++++++++++++++++++++++++++++')
@@ -272,19 +271,18 @@ if __name__ == '__main__':
         model.eval()
         with torch.no_grad():
             dev_batch_list = \
-            data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='dev')
+            data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.eval_batch_size_per_gpu, eva_mode='dev')
             dev_batch_num_per_epoch = len(dev_batch_list)
-            p = progressbar.ProgressBar(dev_batch_num_per_epoch)
+            # p = progressbar.ProgressBar(dev_batch_num_per_epoch)
             print ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
-            p.start()
             all_dev_result = []
             for p_dev_idx in range(dev_batch_num_per_epoch):
-                p.update(p_dev_idx)
+                if p_dev_idx %50 == 0:
+                    print(f'{p_dev_idx*100/dev_batch_num_per_epoch:.2f}% done')
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
                 for item in dev_batch_parse_dict:
                     all_dev_result.append(item)
-            p.finish()
 
             from compute_joint_acc import compute_jacc
             all_dev_result = zip_result(all_dev_result)

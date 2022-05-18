@@ -16,7 +16,6 @@ import torch.nn.functional as F
 import numpy as np
 import operator
 from operator import itemgetter
-import progressbar
 import argparse
 
 import re
