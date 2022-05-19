@@ -35,7 +35,7 @@ def parse_config():
     parser.add_argument('--topn', type=int ,default = 5, help='how many samples will make')
     parser.add_argument('--batch_size', type=int ,default = 10, help='batch_size for t5')
     parser.add_argument('--model_path', type=str ,default = 't5-base', help='batch_size for t5')
-    parser.add_argument('--change_rate', type=int ,default = 0.3, help='batch_size for t5')
+    parser.add_argument('--change_rate', type=float ,default = 0.3, help='batch_size for t5')
     parser.add_argument('--save_path', type=str ,default = './save', help='batch_size for t5')
     
     
