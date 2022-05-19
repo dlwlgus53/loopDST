@@ -39,6 +39,7 @@ def parse_config():
     parser.add_argument('--save_path', type=str ,default = './save', help='batch_size for t5')
     
     
+    
     return parser.parse_args()
 
 
@@ -189,6 +190,19 @@ def generate_new_text(model, dial_turn_id_list, tokenized_masked_list, batch_siz
     return generated_dict
 
 
+def split_by_dial(raw_set):
+    train_set = []
+    test_set = []
+    
+    total_len = len(raw_set)
+    train_len = int(total_len * 0.9)
+    
+    for idx, dial in enumerate(raw_set):
+        if idx < train_len:train_set.append(dial)
+        else: test_set.append(dial)
+    return train_set, test_set
+
+
 import argparse
 if __name__ == '__main__':
     log = log_setting()
@@ -234,6 +248,13 @@ if __name__ == '__main__':
 
     makedirs(f"./{args.save_path}")
 
-    with open(f'./{args.save_path}/similar.json', 'w') as outfile:
-        json.dump(raw_data_similar, outfile, indent=4)
+
+    train_set, test_set = split_by_dial(raw_data_similar)
+    # 90%
+    with open(f'./{args.save_path}/multiwoz-fine-processed-train.json', 'w') as outfile:
+        json.dump(train_set, outfile, indent=4)
+        
+    # 10%
+    with open(f'./{args.save_path}/multiwoz-fine-processed-dev.json', 'w') as outfile:
+        json.dump(test_set, outfile, indent=4)
         
