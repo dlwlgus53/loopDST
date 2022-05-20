@@ -70,6 +70,7 @@ def parse_config():
     parser.add_argument('--model_name', type=str, help='t5-base or t5-large or facebook/bart-base or facebook/bart-large')
 
     parser.add_argument('--pretrained_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
+    parser.add_argument("--init_label_path", type=str, help="random seed")
 
     # training configuration
     parser.add_argument('--optimizer_name', default='adafactor', type=str, help='which optimizer to use during training, adam or adafactor')
@@ -87,6 +88,7 @@ def parse_config():
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2, help="gradient accumulation step.")
     parser.add_argument("--ckpt_save_path", type=str, help="directory to save the model parameters.")
     parser.add_argument("--seed", type=int, default=1, help="random seed")
+    
     
     return parser.parse_args()
 
@@ -207,7 +209,7 @@ if __name__ == '__main__':
         raise Exception('Wrong Specify LR Mode!!!')
 
     from dataclass import DSTMultiWozData
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, shuffle_mode=args.shuffle_mode, 
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, init_label_path = args.init_label_path, shuffle_mode=args.shuffle_mode, 
                           data_mode='train', train_data_ratio=args.train_data_ratio)
 
     log.info ('Start loading model...')

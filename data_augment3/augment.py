@@ -31,6 +31,7 @@ def seed_setting(seed):
 def parse_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
+    parser.add_argument('--init_label_path', type=str, help='The path where the data stores.')
     parser.add_argument('--seed', type=int ,default = 1, help='The path where the data stores.')
     parser.add_argument('--topn', type=int ,default = 5, help='how many samples will make')
     parser.add_argument('--batch_size', type=int ,default = 10, help='batch_size for t5')
@@ -217,7 +218,7 @@ if __name__ == '__main__':
     model = RobertaForMaskedLM.from_pretrained('roberta-base').to(DEVICE)
 
     raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-train.json' # 전체 training data
-    raw_init_datapath = args.data_path_prefix + 'labeled_init.json' # 10% 사용할 때, 어떤 10%를 사용할 지 정보를 가지고 있는 파일
+    raw_init_datapath = args.init_label_path + 'labeled_init.json' # 10% 사용할 때, 어떤 10%를 사용할 지 정보를 가지고 있는 파일
     
     with open(raw_init_datapath) as f:
         init_labeled_data = json.load(f)

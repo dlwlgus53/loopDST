@@ -12,7 +12,7 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class DSTMultiWozData:
-    def __init__(self, model_name, tokenizer, data_path_prefix, shuffle_mode='shuffle_session_level', 
+    def __init__(self, model_name, tokenizer, data_path_prefix, init_label_path, shuffle_mode='shuffle_session_level', 
         data_mode='train', add_prefix=True, add_special_decoder_token=True, train_data_ratio=1.0):
         '''
             model_name: t5-small or t5-base or t5-large
@@ -80,30 +80,38 @@ class DSTMultiWozData:
             with open(train_json_path) as f:
                 train_raw_data = json.load(f)
             # read the labeled data
-            
-                
-
             self.train_data_ratio = train_data_ratio
             assert self.train_data_ratio > 0
             # few-shot learning
             if self.train_data_ratio < 1.0: # TODO save original list
-                print ('Few-shot training setup.')
-                few_shot_num = int(len(train_raw_data) * self.train_data_ratio) + 1
-                random.shuffle(train_raw_data)
-                # randomly select a subset of training data
-                train_raw_data = train_raw_data[:few_shot_num]
-                print ('Number of training sessions is {}'.format(few_shot_num))
-                print ('save into file')
-                train_dict = {}
-                for dial in train_raw_data:
-                    for turn in dial:
-                        dial_turn_idx = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
-                        train_dict[dial_turn_idx] = turn['bspn']
+                if init_label_path:
+                    print("use save init")
+                    data = []
+                    with open(f'{init_label_path}/labeled_init.json') as json_file:
+                        init_data = json.load(json_file)
+                    for dial in train_raw_data:
+                        dial_turn_idx = '[d]'+dial[0]['dial_id'] + '[t]0'
+                        if dial_turn_idx in init_data:
+                            data.append(dial)
+                    train_raw_data = data
+                else:
+                    print ('there is no init file')
+                    few_shot_num = int(len(train_raw_data) * self.train_data_ratio) + 1
+                    random.shuffle('./labeled_init.json')
+                    # randomly select a subset of training data
+                    train_raw_data = train_raw_data[:few_shot_num]
+                    print ('Number of training sessions is {}'.format(few_shot_num))
+                    print ('save into file')
+                    train_dict = {}
+                    for dial in train_raw_data:
+                        for turn in dial:
+                            dial_turn_idx = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
+                            train_dict[dial_turn_idx] = turn['bspn']
+                    with open(labeled_json_path, 'w') as outfile:
+                        json.dump(train_dict, outfile, indent=4)
                         
-                labeled_json_path = data_path_prefix + 'labeled_init.json'
-                with open(labeled_json_path, 'w') as outfile:
-                    json.dump(train_dict, outfile, indent=4)
-
+                        
+                        
             print ('Tokenizing raw train data...')
             train_data_id_list = self.tokenize_raw_data(train_raw_data) # give labled data list too
             self.train_data_list = self.flatten_data(train_data_id_list)
@@ -131,7 +139,7 @@ class DSTMultiWozData:
         dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
+        test_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
         print ('Tokenizing raw test data...')
