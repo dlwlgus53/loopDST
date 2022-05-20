@@ -18,6 +18,8 @@ import logging.handlers
 import copy
 from trainer_part import tagging, train, evaluate
 
+form pre_training import Pre_training
+
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
@@ -52,7 +54,7 @@ def parse_config():
     parser.add_argument('--model_name', type=str, help='t5-base or t5-large or facebook/bart-base or facebook/bart-large')
 
     parser.add_argument('--pretrained_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
-
+    parser.add_argument('--init_label_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     # training configuration
     parser.add_argument('--optimizer_name', default='adafactor', type=str, help='which optimizer to use during training, adam or adafactor')
     parser.add_argument('--specify_adafactor_lr', type=str, default='True', help='True or False, whether specify adafactor lr')
@@ -69,7 +71,6 @@ def parse_config():
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2, help="gradient accumulation step.")
     parser.add_argument("--ckpt_save_path", type=str, help="directory to save the model parameters.")
     parser.add_argument("--seed", type=int, default=1, help="random seed")
-    parser.add_argument("--loop", type=int, default=1, help="loop")
     parser.add_argument("--use_progress", type=int, default=1, help="do progress")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
@@ -289,7 +290,7 @@ if __name__ == '__main__':
     from dataclass_part import DSTMultiWozData
     log.info('Initialize dataclass')
     
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, tagging_all = args.tagging_all, \
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, tagging_all = args.tagging_all, \
         log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
         data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
 
@@ -298,25 +299,24 @@ if __name__ == '__main__':
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
     score_list = ["Best scores"]
+    
     for epoch in range(args.epoch_num):
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         log_sentence.append(f"Epoch {epoch}")
         
-        if args.loop:
-            tagging(args,model,data,log, cuda_available, device)
-            log_sentence.append(f"Tagging : {data.train_num}")
+        tagging(args,model,data,log, cuda_available, device)
+        log_sentence.append(f"Tagging : {data.train_num}")
             
-        if args.loop:
-            student= load_model(args, data, cuda_available,load_pretrained = False)
-            optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
+        student= load_model(args, data, cuda_available,load_pretrained = False)
+        student = pre_training(student)
+        
+        optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
-
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
             if mini_epoch == 0: log_sentence.append(f"Train : {data.train_num}")
             log.info ('Total training loss is %5f' % (train_loss))
-            
             
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
             one_dev_str = 'miniepoch{}_dev_joint_accuracy_{}'.format(mini_epoch, round(dev_score,2))
@@ -328,10 +328,7 @@ if __name__ == '__main__':
                 one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
                 mini_best_str = one_dev_str
                 mini_best_result = dev_score
-
-                
                 save_result(epoch, model, mini_best_str, mini_best_result)
-        
             log.info ('In the mini epoch {}, Currnt joint accuracy is {}, best joint accuracy is {}'.format(mini_epoch, round(dev_score, 2), round(mini_best_result, 2)))
         
         log_sentence.append(" ".join(mini_score_list))
