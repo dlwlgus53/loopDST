@@ -18,7 +18,7 @@ import logging.handlers
 import copy
 from trainer_part import tagging, train, evaluate
 
-form pre_training import Pre_training
+from aug_training_class import aug_training
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -293,7 +293,8 @@ if __name__ == '__main__':
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, tagging_all = args.tagging_all, \
         log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
         data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
-
+    pre_trainer = aug_training()
+    
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
     min_dev_loss = 1e10
@@ -308,8 +309,7 @@ if __name__ == '__main__':
         log_sentence.append(f"Tagging : {data.train_num}")
             
         student= load_model(args, data, cuda_available,load_pretrained = False)
-        student = pre_training(student)
-        
+        student = pre_trainer.train(student)
         optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
