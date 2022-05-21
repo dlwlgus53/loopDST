@@ -1,5 +1,6 @@
 # https://jimmy-ai.tistory.com/196
 # augment data 저장
+# augmen only!
 import random
 import torch
 import os
@@ -141,14 +142,12 @@ def tokenize(input_text,label, tokenizer, change_rate):
         tokenized_input.input_ids[0,mask_position] = mask_idx 
     return tokenized_input.input_ids[0].tolist()
 
-def get_will_change_item(raw_data,init_labeled_data, tokenizer, change_rate):
+def get_will_change_item(raw_data, tokenizer, change_rate):
     tokenized_masked_list = []
     dial_turn_id_list = []
     for dial_idx, dial in enumerate(raw_data):
         if dial_idx%30 == 0 and dial_idx !=0:
             log.info(f'tokenize : {dial_idx}/{len(raw_data)} done')
-        dial_turn_key = '[d]'+ dial[0]['dial_id'] + '[t]' + '0' # 그냥 이 다이얼이 있는지 필요한거야
-        if dial_turn_key not in init_labeled_data: continue
         for turn in dial:
             for n in range(args.topn):
                 dial_turn_key = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
@@ -190,6 +189,13 @@ def generate_new_text(model, dial_turn_id_list, tokenized_masked_list, batch_siz
             break
     return generated_dict
 
+def filtering_data(raw_data, init_labeled_data):
+    data = []
+    for dial in raw_data:
+        dial_turn_key = '[d]'+ dial[0]['dial_id'] + '[t]0'
+        if dial_turn_key in init_labeled_data:
+            data.append(dial)
+    return data
 
 def split_by_dial(raw_set):
     train_set = []
@@ -225,26 +231,23 @@ if __name__ == '__main__':
 
     with open(raw_datapath) as f:
         raw_data = json.load(f)
-    
-    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data,init_labeled_data, tokenizer, args.change_rate)
+        
+    raw_data = filtering_data(raw_data, init_labeled_data)
+    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, args.change_rate)
     generated_dict= generate_new_text(model, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE)
     raw_data_similar = []
+    
     for dial_idx, dial in enumerate(raw_data):
-        dial_turn_key = '[d]'+ dial[0]['dial_id'] + '[t]0'
-        if dial_turn_key not in init_labeled_data: continue
         if dial_idx%30 == 0 and dial_idx !=0:log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
-        for n in range(args.topn+1):
-            if n==0:
-                similar_dial = copy.deepcopy(dial)
-            else:
-                similar_dial = []
-                for turn in dial:
-                    idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n-1)
-                    similar_turn = copy.deepcopy(turn)
-                    similar_turn['dial_id'] += f'_v{str(n)}'
-                    similar_turn['user'] = generated_dict[idx]['text']
-                    similar_turn['mask'] = generated_dict[idx]['mask_text']
-                    similar_dial.append(similar_turn)
+        for n in range(args.topn):
+            similar_dial = []
+            for turn in dial:
+                idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
+                similar_turn = copy.deepcopy(turn)
+                similar_turn['dial_id'] += f'_v{str(n)}'
+                similar_turn['user'] = generated_dict[idx]['text']
+                similar_turn['mask'] = generated_dict[idx]['mask_text']
+                similar_dial.append(similar_turn)
             raw_data_similar.append(similar_dial)
 
     makedirs(f"./{args.save_path}")
