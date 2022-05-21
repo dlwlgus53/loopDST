@@ -186,7 +186,7 @@ def generate_new_text(model, dial_turn_id_list, tokenized_masked_list, batch_siz
             
         start += batch_size
         
-        if start> len(dial_turn_id_list):
+        if start>= len(dial_turn_id_list):
             break
     return generated_dict
 
