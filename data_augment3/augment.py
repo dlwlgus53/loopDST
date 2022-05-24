@@ -189,11 +189,11 @@ def generate_new_text(model, dial_turn_id_list, tokenized_masked_list, batch_siz
             break
     return generated_dict
 
-def filtering_data(raw_data, init_labeled_data):
+def filtering_data(raw_data, filter_data):
     data = []
     for dial in raw_data:
         dial_turn_key = '[d]'+ dial[0]['dial_id'] + '[t]0'
-        if dial_turn_key in init_labeled_data:
+        if dial_turn_key in filter_data:
             data.append(dial)
     return data
 

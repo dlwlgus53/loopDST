@@ -1,6 +1,6 @@
 import sys
 sys.path.append('../')
-from ..data_augment3.augment import seed_setting, log_setting, get_will_change_item,generate_new_text
+from ..data_augment3.augment import *
 import torch
 import random
 import copy
@@ -25,25 +25,28 @@ class aug_training:
     
     def _makedirs(self, path): 
         try: 
-                os.makedirs(path) 
+            os.makedirs(path) 
         except OSError: 
             if not os.path.isdir(path): 
                 raise
-    def _change_format(self, raw_data, labeled,data):
-        # 원본대신 라벨링 된 데이터로 대체
-        # 라벨링 된 데이터만 남기자
+            
+            
+    def _change_label(self, raw_data, labeled_data):
+        for dial in raw_data:
+            dial_key_idx = ""
+            raw_data['bspn'] = labeled_data[dial_key_idx]
         return raw_data
     
-    def augment(self, raw_data, labeled_data, init_labeled_data, change_rate, DEVICE, aug_batch_size = 10): # 이미 있는걸 받았다고 쳐
-        raw_data = self._change_format(raw_data, labeled_data)
-        # 이거 그대로 로드해오기
-        dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data,init_labeled_data, self.aug_tokenizer, change_rate)
+    
+    
+    def augment(self, raw_data, labeled_data, change_rate, DEVICE, aug_batch_size = 10):
+        raw_data = filtering_data(raw_data, labeled_data)
+        raw_data = self._change_label(raw_data, labeled_data)
+        dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, self.aug_tokenizer, change_rate)
         generated_dict= generate_new_text(self.aug_model, dial_turn_id_list, tokenized_masked_list, aug_batch_size, DEVICE)
-        
         raw_data_similar = []
+        
         for dial_idx, dial in enumerate(raw_data):
-            dial_turn_key = '[d]'+ dial[0]['dial_id'] + '[t]0'
-            if dial_turn_key not in init_labeled_data: continue
             if dial_idx%30 == 0 and dial_idx !=0: self.log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
             for n in range(args.topn):
                 similar_dial = []
@@ -58,4 +61,5 @@ class aug_training:
         return raw_data_similar
     
     def train(self, data, model, epoch):
+        
         return model

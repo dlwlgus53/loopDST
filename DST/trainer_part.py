@@ -30,17 +30,13 @@ def tagging(args,model,data,log, cuda_available, device):
     with torch.no_grad():
         tagging_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='tagging')
         _ = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
-        if args.use_progress: p = progressbar.ProgressBar(_)
-        if args.use_progress: p.start()
         p_tagging_idx = 0
         
         for train_batch, dial_turn_key_batch in tagging_iterator:
             if p_tagging_idx == 0:
                 tagging_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
             p_tagging_idx += 1
-            if args.use_progress: p.update(p_tagging_idx)
-            else:
-                if p_tagging_idx%10 == 0: log.info(f'Tagged {p_tagging_idx* 100/tagging_batch_num_per_epoch:.2f} %')       
+            if p_tagging_idx%10 == 0: log.info(f'Tagged {p_tagging_idx* 100/tagging_batch_num_per_epoch:.2f} %')       
             one_train_input_batch, one_train_output_batch = train_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
 
@@ -52,7 +48,6 @@ def tagging(args,model,data,log, cuda_available, device):
             tagging_batch_parse_dict, confidence_list = model.module.tagging(src_input, src_mask)   
             for predict_result,dial_turn_key, confidence in zip(tagging_batch_parse_dict, dial_turn_key_batch, confidence_list):
                 confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
-        if args.use_progress: p.finish()
     
     cnt =0
     labeled_json_path = args.ckpt_save_path + '/labeled.json'
@@ -71,27 +66,16 @@ def tagging(args,model,data,log, cuda_available, device):
         labeled_data[key] = value
         if cnt>qsize*args.confidence_percent and not args.tagging_all:
             break
-    
-    labeled_data = merge_two_dicts(labeled_data, data.init_labeled_data)
-    with open(labeled_json_path, 'w') as outfile:
-        json.dump(labeled_data, outfile, indent=4)
-        time.sleep(3)
-    data.update_labeled_data()
+    init_labeled_data = data.get_init_data()
+    labeled_data = merge_two_dicts(labeled_data, init_labeled_data)
+    data.set_labeld_data(labeled_data)
     log.info(f"Saved {cnt} tagged data until confidence {float(args.confidence_percent)*100} %")
     
 def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device):
-    
     log.info('Training Session Start')
     model.train()
-    
-    if args.loop == 0:
-        train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train')
-    else:
-        train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
-        
+    train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
     train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
-    if args.use_progress: p = progressbar.ProgressBar(train_batch_num_per_epoch)
-    if args.use_progress: p.start()
     p_train_idx = 0
     epoch_step, train_loss = 0, 0.
     for train_batch, _ in train_iterator:
@@ -99,9 +83,7 @@ def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_
             train_batch_num_per_epoch = int(data.train_num / (args.number_of_gpu * args.batch_size_per_gpu))
         p_train_idx += 1
 
-        if args.use_progress: p.update(p_train_idx)
-        else:
-            if p_train_idx%100 == 0: log.info(f'Training {p_train_idx*100/train_batch_num_per_epoch:.2f} %')
+        if p_train_idx%100 == 0: log.info(f'Training {p_train_idx*100/train_batch_num_per_epoch:.2f} %')
         one_train_input_batch, one_train_output_batch = train_batch
         if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
         train_batch_src_tensor, train_batch_src_mask, train_batch_input, train_batch_labels = \
@@ -130,10 +112,10 @@ def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_
             else:
                 pass
             optimizer.zero_grad()
-    if args.use_progress: p.finish()
     train_loss = train_loss / train_batch_num_per_epoch
     
     return train_loss
+
 def evaluate(args,model,data,log, cuda_available, device):
     log.info('Evalation Session Start')
     model.eval()
@@ -141,21 +123,15 @@ def evaluate(args,model,data,log, cuda_available, device):
         dev_batch_list = \
         data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='dev')
         dev_batch_num_per_epoch = len(dev_batch_list)
-        if args.use_progress: p = progressbar.ProgressBar(dev_batch_num_per_epoch)
         log.info ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
-        if args.use_progress: p.start()
         
         all_dev_result = []
         for p_dev_idx in range(dev_batch_num_per_epoch):
-            if args.use_progress: p.update(p_dev_idx)
-            else:
-                if p_dev_idx%100 == 0: log.info(f'Evaluation {p_dev_idx*100/dev_batch_num_per_epoch:.2f} %')
+            if p_dev_idx%100 == 0: log.info(f'Evaluation {p_dev_idx*100/dev_batch_num_per_epoch:.2f} %')
             one_inference_batch = dev_batch_list[p_dev_idx]
             dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
             for item in dev_batch_parse_dict:
                 all_dev_result.append(item)
-        if args.use_progress: p.finish()
-
         from compute_joint_acc import compute_jacc
         all_dev_result = zip_result(all_dev_result)
         dev_score = compute_jacc(data=all_dev_result) * 100

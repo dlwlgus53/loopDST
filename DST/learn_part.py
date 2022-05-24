@@ -5,7 +5,6 @@ import torch
 import random
 import argparse
 import operator
-import progressbar
 import torch.nn as nn
 from torch.optim import Adam
 from operator import itemgetter
@@ -71,7 +70,6 @@ def parse_config():
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2, help="gradient accumulation step.")
     parser.add_argument("--ckpt_save_path", type=str, help="directory to save the model parameters.")
     parser.add_argument("--seed", type=int, default=1, help="random seed")
-    parser.add_argument("--use_progress", type=int, default=1, help="do progress")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
@@ -244,8 +242,6 @@ if __name__ == '__main__':
     device = torch.device('cuda')
     makedirs(args.ckpt_save_path)
     
-    
-    
     fileHandler = logging.FileHandler(f'{args.ckpt_save_path}log.txt')
     streamHandler = logging.StreamHandler()
 
@@ -257,6 +253,8 @@ if __name__ == '__main__':
     
     log.info('seed setting')
     init_experiment(args)
+    
+    
     assert args.model_name.startswith('t5')
     from transformers import T5Tokenizer
     if args.pretrained_path != 'None':
@@ -292,7 +290,9 @@ if __name__ == '__main__':
     
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, tagging_all = args.tagging_all, \
         log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
-        data_mode='train', train_data_ratio=args.train_data_ratio,  use_progress = args.use_progress, debugging = args.debugging)
+        data_mode='train', train_data_ratio=args.train_data_ratio,  debugging = args.debugging)
+    
+    
     pre_trainer = aug_training()
     
     model = load_model(args, data, cuda_available)
@@ -308,8 +308,10 @@ if __name__ == '__main__':
         tagging(args,model,data,log, cuda_available, device)
         log_sentence.append(f"Tagging : {data.train_num}")
             
-        student= load_model(args, data, cuda_available,load_pretrained = False)
-        student = pre_trainer.train(student)
+        student= load_model(args, data, cuda_available, load_pretrained = False)
+        if args.augment:
+            augmented_data = pre_trainer.augment(raw_data, labeled_data, change_rate, DEVICE)
+            student = pre_trainer.train(student)
         optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
