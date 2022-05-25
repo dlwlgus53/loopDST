@@ -112,12 +112,13 @@ class DSTMultiWozData:
                 res_token_id_list.append(one_id)
         return res_token_id_list
 
-    def tokenize_raw_data(self, raw_data_list): # TODO also get labeld data list and answer
+    def tokenize_raw_data(self, raw_data_list, bspn_filter = False): # TODO also get labeld data list and answer
         data_num = len(raw_data_list)
         all_session_list = []
         for idx in range(data_num):
             one_sess_list = []
             for turn in raw_data_list[idx]: 
+                
                 one_turn_dict = {}
                 for key in turn:
                     if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db']:
@@ -132,10 +133,10 @@ class DSTMultiWozData:
         assert len(all_session_list) == len(raw_data_list)
         return all_session_list
     
-    def get_init_data(self):
-        return self.init_labeled_data
+    # def get_init_data(self):
+    #     return self.init_labeled_data
     
-    def set_labeled_data(self,labeled_data):
+    def update_labeled_data(self,labeled_data):
         self.log.info("Update the labeled_data")
         self.labeled_data = labeled_data
 
@@ -203,19 +204,17 @@ class DSTMultiWozData:
     def make_data_list(self, raw_data):
         data_id_list = self.tokenize_raw_data(copy.deepcopy(raw_data)) # give labled data list too
         data_list = self.flatten_data(data_id_list)
-        
         return data_list
 
     def filter_data(self, raw, filter, use_label):
         new_data = []
-        for dial in raw:
-            dial_turn_key = '[d]'+dial[0]['dial_id'] + '[t]' + str(0)
-            if use_label == True:
-                if dial_turn_key in filter.keys():
-                    new_data.append(dial)
-            elif use_label == False:
+        if use_label == False:
+            for dial in raw:
+                dial_turn_key = '[d]'+dial[0]['dial_id'] + '[t]' + str(0)
                 if dial_turn_key not in filter.keys():
                     new_data.append(dial)
+                    
+                    
         return new_data
     
     def replace_label(self, raw, label):
@@ -231,8 +230,7 @@ class DSTMultiWozData:
         batch_list = []
         idx_list = []
         if mode == 'train_loop':
-            raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = True)
-            raw_data = self.replace_label(raw_data, self.labeled_data)
+            raw_data = self.replace_label(self.train_raw_data, self.labeled_data)
             self.train_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.train_data_list 
         elif mode == 'tagging':
@@ -245,14 +243,8 @@ class DSTMultiWozData:
         
         for item in all_data_list:  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
-            one_input_data_list = []
-            # for key in ['bs_input']:
-            #     one_input_data_list.append(item[key])
+            if mode == 'train_loop' and dial_turn_key not in self.labeled_data : continue
             all_input_data_list.append(item['bs_input'])
-
-            one_output_data_list = []
-            # for key in ['bs_output']:
-                # one_output_data_list.append(item[key])
             all_output_data_list.append(item['bs_output'])
             all_index_list.append(dial_turn_key)
         
@@ -371,8 +363,6 @@ class DSTMultiWozData:
         
         all_bs_input_id_list, all_parse_dict_list = [], []
         for i, item in enumerate(data_list):
-            if i%1000 ==0 :
-                self.log.info(f'make {eva_mode} batches! {i * 100/len(data_list):.2f}')
             one_bs_input_id_list, one_parse_dict = self.parse_one_eva_instance(item)
             all_bs_input_id_list.append(one_bs_input_id_list)
             all_parse_dict_list.append(one_parse_dict)

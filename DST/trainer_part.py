@@ -12,7 +12,7 @@ from operator import itemgetter
 import torch.nn.functional as F
 from inference_utlis import batch_generate
 import time
-
+import copy
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
 import logging.handlers
@@ -35,9 +35,9 @@ def tagging(args,model,data,log, cuda_available, device):
             if idx  == 0:
                 tagging_data_num = len(data.tagging_data_list)
                 tagging_batch_num_per_epoch = int(tagging_data_num / (args.number_of_gpu * args.batch_size_per_gpu))
-                log.info(f"tagging num : {tagging_data_num}")
+                log.info(f"unlabeled data num : {tagging_data_num}")
 
-            if idx%10 == 0: log.info(f'Tagged {idx* 100/tagging_batch_num_per_epoch:.2f} %')       
+            if idx%args.log_interval == 0: log.info(f'Tagged {idx* 100/tagging_batch_num_per_epoch:.2f} %')       
             one_train_input_batch, one_train_output_batch = tagging_batch
             if len(one_train_input_batch) == 0 or len(one_train_output_batch) == 0: break
 
@@ -51,22 +51,25 @@ def tagging(args,model,data,log, cuda_available, device):
                 confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
     
     labeled_cnt =0
+    
+    prev_labeled_data_len = len(data.labeled_data)
     labeled_data = data.labeled_data
+    
     qsize = confidence_que.qsize()
     while confidence_que.empty() != True:
         labeled_cnt +=1
         key, value = confidence_que.get()[1]
-        assert key not in labeled_data
         labeled_data[key] = value
         if labeled_cnt>qsize*args.confidence_percent:
             break
-    init_labeled_data = data.get_init_data()
-    labeled_data = merge_two_dicts(labeled_data, init_labeled_data)
-    data.set_labeled_data(labeled_data)
-    log.info(f"Saved {labeled_cnt} tagged data until confidence {float(args.confidence_percent)*100} %")
+    # init_labeled_data = data.get_init_data()
+    # labeled_data = merge_two_dicts(labeled_data, init_labeled_data)
+    data.update_labeled_data(labeled_data)
+    
+    log.info(f"prior labeld data: {prev_labeled_data_len} unlabeld data: {tagging_data_num} saving :{labeled_cnt}")
+    log.info(f"updated tagged data: {len(data.labeled_data)}")
     
 def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device):
-    log.info('Training Session Start')
     model.train()
     train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
     epoch_step, train_loss = 0, 0.
@@ -117,7 +120,7 @@ def evaluate(args,model,data,log, cuda_available, device):
         
         all_dev_result = []
         for p_dev_idx in range(dev_batch_num_per_epoch):
-            if p_dev_idx%100 == 0: log.info(f'Evaluation {p_dev_idx*100/dev_batch_num_per_epoch:.2f} %')
+            if p_dev_idx%args.log_interval == 0: log.info(f'Evaluation {p_dev_idx*100/dev_batch_num_per_epoch:.2f} %')
             one_inference_batch = dev_batch_list[p_dev_idx]
             dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
             for item in dev_batch_parse_dict:

@@ -474,10 +474,8 @@ class DSTMultiWozData:
         '''
         if eva_mode == 'dev':
             data_list = self.dev_data_list
-            eva_num = self.dev_num
         elif eva_mode == 'test':
             data_list = self.test_data_list
-            eva_num = self.test_num
         else:
             raise Exception('Wrong Evaluation Mode!!!')
 

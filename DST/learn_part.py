@@ -67,6 +67,7 @@ def parse_config():
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
+    parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     
     
     return parser.parse_args()
@@ -94,7 +95,6 @@ def get_optimizers(model, args, specify_adafactor_lr):
     elif args.optimizer_name == 'adafactor':
         from transformers.optimization import Adafactor, AdafactorSchedule
         if specify_adafactor_lr:
-            log.info ('Specific learning rate.')
             optimizer = Adafactor(
                 optimizer_grouped_parameters,
                 lr=1e-3,
@@ -109,7 +109,6 @@ def get_optimizers(model, args, specify_adafactor_lr):
             )
             scheduler = None
         else:
-            log.info ('Do not specific learning rate.')
             optimizer = Adafactor(optimizer_grouped_parameters, 
                 scale_parameter=True, 
                 relative_step=True, 
@@ -268,7 +267,7 @@ if __name__ == '__main__':
     for epoch in range(args.epoch_num):
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         log_sentence.append(f"Epoch {epoch}")
-        
+        log.info(f"Epoch {epoch} Tagging start")
         tagging(args,model,data,log, cuda_available, device)
         student= load_model(args, data, cuda_available, load_pretrained = False)
         # if args.augment:
@@ -278,12 +277,13 @@ if __name__ == '__main__':
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
+            log.info(f"Epoch {epoch}-{mini_epoch} training start")
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
-            log.info ('Total training loss is %5f' % (train_loss))
+            log.info ('Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
             
+            log.info ('Epoch {epoch}-{mini_epoch} evaluate start')
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
-            one_dev_str = 'miniepoch{}_dev_joint_accuracy_{}'.format(mini_epoch, round(dev_score,2))
-            log.info(one_dev_str)
+            log.info ('Epoch {epoch}-{mini_epoch} JGA is {dev_score}')
             mini_score_list.append(f'{dev_score:.2f}')
             
             if dev_score > mini_best_result:
