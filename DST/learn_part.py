@@ -279,11 +279,11 @@ if __name__ == '__main__':
         for mini_epoch in range(args.mini_epoch):
             log.info(f"Epoch {epoch}-{mini_epoch} training start")
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
-            log.info ('Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
+            log.info (f'Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
             
-            log.info ('Epoch {epoch}-{mini_epoch} evaluate start')
+            log.info (f'Epoch {epoch}-{mini_epoch} evaluate start')
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
-            log.info ('Epoch {epoch}-{mini_epoch} JGA is {dev_score}')
+            log.info (f'Epoch {epoch}-{mini_epoch} JGA is {dev_score}')
             mini_score_list.append(f'{dev_score:.2f}')
             
             if dev_score > mini_best_result:
