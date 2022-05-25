@@ -80,8 +80,8 @@ class DSTMultiWozData:
         self.dev_data_list = self.make_data_list(raw_data = dev_raw_data)
         self.test_data_list = self.make_data_list(raw_data = test_raw_data)
 
-        self.log.info ('train turn number is %d, dev turn number is %d, test turn number is %d ' % \
-            (len(train_data_list), len(self.dev_data_list), len(self.test_data_list)))
+        self.log.info (' dev turn number is %d, test turn number is %d ' % \
+            ( len(self.dev_data_list), len(self.test_data_list)))
 
     def log_setting(self, log_path):
         log = logging.getLogger('log in data')
@@ -127,7 +127,6 @@ class DSTMultiWozData:
                         value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
                         value_id = self.replace_sos_eos_token_id(value_id)
                         one_turn_dict[key] = value_id
-
                 one_sess_list.append(one_turn_dict)
             all_session_list.append(one_sess_list)
         assert len(all_session_list) == len(raw_data_list)
@@ -137,6 +136,7 @@ class DSTMultiWozData:
         return self.init_labeled_data
     
     def set_labeled_data(self,labeled_data):
+        self.log.info("Update the labeled_data")
         self.labeled_data = labeled_data
 
     def tokenized_decode(self, token_id_list):
@@ -167,7 +167,6 @@ class DSTMultiWozData:
         return special_tokens
 
     def flatten_data(self, data):
-        
         data_list = []
         for session in data: # session is dial
             one_dial_id = session[0]['dial_id']
@@ -179,13 +178,9 @@ class DSTMultiWozData:
                 curr_user_input = curr_turn['user']
                 curr_sys_resp = curr_turn['resp']
                 curr_bspn = curr_turn['bspn']
-                # construct belief state data
-                # -900 menas get from last character - 900
                 bs_input = previous_context + curr_user_input
                 bs_input = self.bs_prefix_id + [self.sos_context_token_id] + bs_input[-900:] + [self.eos_context_token_id]
                 bs_output = curr_bspn
-
-                    
                 data_list.append({'dial_id': one_dial_id,
                     'turn_num': turn_id,
                     'prev_context':previous_context,
@@ -201,24 +196,34 @@ class DSTMultiWozData:
                     })
                 # update context for next turn
                 previous_context = previous_context + curr_user_input + curr_sys_resp
+        
         return data_list
 
 
     def make_data_list(self, raw_data):
         data_id_list = self.tokenize_raw_data(copy.deepcopy(raw_data)) # give labled data list too
         data_list = self.flatten_data(data_id_list)
+        
         return data_list
 
     def filter_data(self, raw, filter, use_label):
         new_data = []
-        dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
-        if mode == 'train_loop' and  dial_turn_key not in self.labeled_data.keys():
-            continue
-        if mode == 'tagging' and dial_turn_key in self.labeled_data.keys() :
-            continue
-        return raw
+        for dial in raw:
+            dial_turn_key = '[d]'+dial[0]['dial_id'] + '[t]' + str(0)
+            if use_label == True:
+                if dial_turn_key in filter.keys():
+                    new_data.append(dial)
+            elif use_label == False:
+                if dial_turn_key not in filter.keys():
+                    new_data.append(dial)
+        return new_data
     
     def replace_label(self, raw, label):
+        for dial in raw:
+            for turn in dial:
+                dial_turn_key = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
+                if dial_turn_key in label:
+                    turn['bspn'] = label[dial_turn_key]
         return raw
         
         
@@ -231,23 +236,24 @@ class DSTMultiWozData:
             self.train_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.train_data_list 
         elif mode == 'tagging':
-            raw_data = self.filter_data(self.tagging_data_list, self.labeled_data, use_label = False)
+            raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
             self.tagging_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.tagging_data_list
         else:
             raise Exception('Wrong Mode!!!')
         all_input_data_list, all_output_data_list, all_index_list = [], [], []
-        for item in all_data_list:
+        
+        for item in all_data_list:  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
             one_input_data_list = []
-            for key in ['bs_input']:
-                one_input_data_list.append(item[key])
-            all_input_data_list.extend(one_input_data_list)
+            # for key in ['bs_input']:
+            #     one_input_data_list.append(item[key])
+            all_input_data_list.append(item['bs_input'])
 
             one_output_data_list = []
-            for key in ['bs_output']:
-                one_output_data_list.append(item[key])
-            all_output_data_list.extend(one_output_data_list)
+            # for key in ['bs_output']:
+                # one_output_data_list.append(item[key])
+            all_output_data_list.append(item['bs_output'])
             all_index_list.append(dial_turn_key)
         
         data_num = len(all_input_data_list)
@@ -278,6 +284,8 @@ class DSTMultiWozData:
         batch_list, idx_list = self.get_filtered_batches(batch_size, mode)
         for batch, idx in zip(batch_list, idx_list):
             yield batch, idx
+
+
 
     def pad_batch(self, batch_id_list):
         batch_id_list = [torch.LongTensor(item) for item in batch_id_list]
@@ -310,11 +318,13 @@ class DSTMultiWozData:
                 res_list.append(token)
         return ' '.join(res_list).strip()
 
+
     def parse_id_to_text(self, id_list):
         res_text = self.tokenized_decode(id_list)
         res_text = self.remove_sos_eos_token(res_text)
         return res_text
 
+################################## need only for evaluation ###########################################
     def parse_one_eva_instance(self, one_instance):
         res_dict = {}
         res_dict['dial_id'] = one_instance['dial_id']
@@ -332,7 +342,7 @@ class DSTMultiWozData:
         bs_input_id_list = self.bs_prefix_id + [self.sos_context_token_id] + bs_input_id_list[-900:] + [self.eos_context_token_id]
         return bs_input_id_list, res_dict
 
-    def build_batch_list(self, all_data_list, batch_size):
+    def build_evaluation_batch_list(self, all_data_list, batch_size):
         data_num = len(all_data_list)
         batch_num = int(data_num/batch_size) + 1
         batch_list = []
@@ -367,8 +377,8 @@ class DSTMultiWozData:
             all_bs_input_id_list.append(one_bs_input_id_list)
             all_parse_dict_list.append(one_parse_dict)
         assert len(all_bs_input_id_list) == len(all_parse_dict_list)
-        bs_batch_list = self.build_batch_list(all_bs_input_id_list, eva_batch_size)
-        parse_dict_batch_list = self.build_batch_list(all_parse_dict_list, eva_batch_size)
+        bs_batch_list = self.build_evaluation_batch_list(all_bs_input_id_list, eva_batch_size)
+        parse_dict_batch_list = self.build_evaluation_batch_list(all_parse_dict_list, eva_batch_size)
 
         batch_num = len(bs_batch_list)
         final_batch_list = []

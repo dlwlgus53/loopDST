@@ -56,6 +56,7 @@ def parse_config():
     parser = argparse.ArgumentParser()
     # dataset configuration
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
+    parser.add_argument('--save_label_path', type=str, help='The path where the data stores.')
 
     parser.add_argument('--shuffle_mode', type=str, default='shuffle_session_level', 
         help="shuffle_session_level or shuffle_turn_level, it controls how we shuffle the training data.")
@@ -209,8 +210,8 @@ if __name__ == '__main__':
         raise Exception('Wrong Specify LR Mode!!!')
 
     from dataclass import DSTMultiWozData
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix, init_label_path = args.init_label_path, shuffle_mode=args.shuffle_mode, 
-                          data_mode='train', train_data_ratio=args.train_data_ratio)
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,shuffle_mode=args.shuffle_mode,  init_label_path = args.init_label_path, \
+        save_label_path= args.save_label_path, data_mode='train', train_data_ratio=args.train_data_ratio)
 
     log.info ('Start loading model...')
     if args.model_name.startswith('facebook/bart'):

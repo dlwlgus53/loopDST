@@ -10,14 +10,15 @@ from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
 from inference_utlis import batch_generate
-
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
 import logging.handlers
 import copy
 from trainer_part import tagging, train, evaluate
+from modelling.T5Model import T5Gen_Model
+from dataclass_part import DSTMultiWozData
 
-from aug_training_class import aug_training
+# from aug_training_class import aug_training
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -39,19 +40,12 @@ def parse_config():
     parser = argparse.ArgumentParser()
     # dataset configuration
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
-
     parser.add_argument('--shuffle_mode', type=str, default='shuffle_session_level', 
         help="shuffle_session_level or shuffle_turn_level, it controls how we shuffle the training data.")
-
     parser.add_argument('--add_prefix', type=str, default='True', 
         help="True or False, whether we add prefix when we construct the input sequence.")
-
-    parser.add_argument('--add_special_decoder_token', default='True', type=str, help='Whether we discriminate the decoder start and end token for different tasks.')
-
-    parser.add_argument('--train_data_ratio', type=float, default=1.0, help='the ratio of training data used for training the model')
     # model configuration
     parser.add_argument('--model_name', type=str, help='t5-base or t5-large or facebook/bart-base or facebook/bart-large')
-
     parser.add_argument('--pretrained_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     parser.add_argument('--init_label_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     # training configuration
@@ -73,11 +67,6 @@ def parse_config():
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
-    parser.add_argument("--tagging_all", type=int, default=0, help="tagging all?")
-    
-    
-    
-    
     
     
     return parser.parse_args()
@@ -133,25 +122,12 @@ def get_optimizers(model, args, specify_adafactor_lr):
 
 def load_model(args, data, cuda_available, load_pretrained = True):
     log.info ('Start loading model...')
-    if args.model_name.startswith('facebook/bart'):
-        # load bart model
-        from modelling.BARTModel import BARTGen_Model
-        if args.pretrained_path != 'None' and load_pretrained:
-            model = BARTGen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
-        else:
-            model = BARTGen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
-    elif args.model_name.startswith('t5'):
-        from modelling.T5Model import T5Gen_Model
-        if args.pretrained_path != 'None' and load_pretrained:
-            model = T5Gen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
-        else:
-            model = T5Gen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-                add_special_decoder_token=add_special_decoder_token, is_training=True)
+    if args.pretrained_path != 'None' and load_pretrained:
+        model = T5Gen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
+            add_special_decoder_token=add_special_decoder_token, is_training=True)
     else:
-        raise Exception('Wrong Model Type!!!')
+        model = T5Gen_Model(args.model_name, data.tokenizer, data.special_token_list, dropout=args.dropout, 
+            add_special_decoder_token=add_special_decoder_token, is_training=True)
 
     if cuda_available:
         if multi_gpu_training:
@@ -264,19 +240,8 @@ if __name__ == '__main__':
         log.info ('Loading from internet {args.model_name}')
         tokenizer = T5Tokenizer.from_pretrained(args.model_name)
 
-    if args.add_prefix == 'True':
-        add_prefix = True
-    elif args.add_prefix == 'False':
-        add_prefix = False
-    else:
-        raise Exception('Wrong Prefix Mode!!!')
-
-    if args.add_special_decoder_token == 'True':
-        add_special_decoder_token = True
-    elif args.add_special_decoder_token == 'False':
-        add_special_decoder_token = False
-    else:
-        raise Exception('Wrong Add Special Token Mode!!!')
+    add_prefix = True
+    add_special_decoder_token = True
 
     if args.specify_adafactor_lr == 'True':
         specify_adafactor_lr = True
@@ -285,15 +250,14 @@ if __name__ == '__main__':
     else:
         raise Exception('Wrong Specify LR Mode!!!')
 
-    from dataclass_part import DSTMultiWozData
     log.info('Initialize dataclass')
     
-    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, tagging_all = args.tagging_all, \
-        log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, 
-        data_mode='train', train_data_ratio=args.train_data_ratio,  debugging = args.debugging)
+    data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, \
+        log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, \
+          debugging = args.debugging)
     
     
-    pre_trainer = aug_training()
+    # pre_trainer = aug_training()
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
@@ -306,18 +270,15 @@ if __name__ == '__main__':
         log_sentence.append(f"Epoch {epoch}")
         
         tagging(args,model,data,log, cuda_available, device)
-        log_sentence.append(f"Tagging : {data.train_num}")
-            
         student= load_model(args, data, cuda_available, load_pretrained = False)
-        if args.augment:
-            augmented_data = pre_trainer.augment(raw_data, labeled_data, change_rate, DEVICE)
-            student = pre_trainer.train(student)
+        # if args.augment:
+        #     augmented_data = pre_trainer.augment(raw_data, labeled_data, change_rate, DEVICE)
+        #     student = pre_trainer.train(student)
         optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
             train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
-            if mini_epoch == 0: log_sentence.append(f"Train : {data.train_num}")
             log.info ('Total training loss is %5f' % (train_loss))
             
             all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
