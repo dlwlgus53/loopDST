@@ -235,7 +235,7 @@ class DSTMultiWozData:
             all_data_list = self.train_data_list 
         elif mode == 'tagging':
             # raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
-            self.tagging_data_list = self.make_data_list(raw_data) # make dataset with labeled data
+            self.tagging_data_list = self.make_data_list(self.train_raw_data,) # make dataset with labeled data
             all_data_list = self.tagging_data_list
         else:
             raise Exception('Wrong Mode!!!')
