@@ -4,21 +4,17 @@ import json
 import torch
 import random
 import argparse
-import operator
 import torch.nn as nn
 from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
-from inference_utlis import batch_generate
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
 import logging.handlers
-import copy
 from trainer_part import tagging, train, evaluate
 from modelling.T5Model import T5Gen_Model
 from dataclass_part import DSTMultiWozData
-
-# from aug_training_class import aug_training
+from aug_training import Aug_training
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -68,6 +64,7 @@ def parse_config():
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
+    parser.add_argument("--augment", type=str, help="use augment or not")
     
     
     return parser.parse_args()
@@ -150,7 +147,6 @@ def save_result(epoch, model, one_dev_str,all_dev_result):
     log.info ('Saving Model...')
     model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
 
-    import os
     if os.path.exists(model_save_path):
         pass
     else: # recursively construct directory
@@ -166,8 +162,6 @@ def save_result(epoch, model, one_dev_str,all_dev_result):
     with open(pkl_save_path, 'w') as outfile:
         json.dump(all_dev_result, outfile, indent=4)
 
-    import os
-    from operator import itemgetter
     fileData = {}
     test_output_dir = args.ckpt_save_path
     for fname in os.listdir(test_output_dir):
@@ -194,7 +188,6 @@ def makedirs(path):
        if not os.path.isdir(path): 
            raise
 
-import argparse
 if __name__ == '__main__':
     log_sentence = []
     # MAKE FOLDER
@@ -256,7 +249,7 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    # pre_trainer = aug_training()
+    if args.augment: pre_trainer = Aug_training()
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
@@ -268,11 +261,14 @@ if __name__ == '__main__':
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         log_sentence.append(f"Epoch {epoch}")
         log.info(f"Epoch {epoch} Tagging start")
+        ####################### tagging ################################
         tagging(args,model,data,log, cuda_available, device)
+        
+        ##################### training #################################
         student= load_model(args, data, cuda_available, load_pretrained = False)
-        # if args.augment:
-        #     augmented_data = pre_trainer.augment(raw_data, labeled_data, change_rate, DEVICE)
-        #     student = pre_trainer.train(student)
+        if args.augment:
+            augmented_data = pre_trainer.augment(raw_data, labeled_data, change_rate, DEVICE)
+            student = pre_trainer.train(student)
         optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']

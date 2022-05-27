@@ -14,7 +14,7 @@ from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
-class aug_training:
+class Aug_training:
     def __init__(self,top_n, seed):
         seed_setting(seed)
         self.log = log_setting()
