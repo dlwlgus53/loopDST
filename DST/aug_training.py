@@ -1,6 +1,6 @@
 import sys
-sys.path.append('../')
-from ..data_augment3.augment import log_setting, get_will_change_item, generate_new_text
+sys.path.append('../../../../')
+from data_augment3.augment import log_setting, get_will_change_item, generate_new_text
 import torch
 import random
 import copy
@@ -26,7 +26,7 @@ class Aug_training:
         self.aug_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
         self.aug_config = RobertaConfig()
         self.aug_model = RobertaForMaskedLM.from_pretrained('roberta-base').to(DEVICE)
-        self.aug_num
+        self.aug_num = aug_num
 
     
     def _makedirs(self, path): 
@@ -54,7 +54,7 @@ class Aug_training:
                     similar_turn['mask'] = generated_dict[idx]['mask_text']
                     similar_dial.append(similar_turn)
                 raw_data_similar.append(similar_dial)
-        # split to train and dev
+        pdb.set_trace()
         return train, dev
     
     def train(self, log, args, data, model, epoch, optimizer, scheduler, cuda_available, device,):
