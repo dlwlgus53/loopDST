@@ -364,7 +364,7 @@ class DSTMultiWozData:
             raise Exception('Wrong Evaluation Mode!!!')
         
         all_bs_input_id_list, all_parse_dict_list = [], []
-        for i, item in enumerate(data_list):
+        for _, item in enumerate(data_list):
             one_bs_input_id_list, one_parse_dict = self.parse_one_eva_instance(item)
             all_bs_input_id_list.append(one_bs_input_id_list)
             all_parse_dict_list.append(one_parse_dict)
@@ -382,3 +382,11 @@ class DSTMultiWozData:
             else:
                 final_batch_list.append(one_final_batch)
         return final_batch_list
+
+
+############################### aug #################################
+def set_train_aug(self, train_aug_data):
+    pass
+
+def set_eval_aug(self, dev_aug_data):
+    pass

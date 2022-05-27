@@ -72,11 +72,16 @@ def tagging(args,model,data,log, cuda_available, device):
     
 def train(args, model,optimizer, scheduler, data,log, cuda_available, device, mode):
     model.train()
-    train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode=mode)
+    if mode == 'train_loop':
+        train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode=mode)
+    elif mode == 'train_aug':
+        train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode=mode)
+        
     epoch_step, train_loss = 0, 0.
     for idx, (train_batch, _) in enumerate(train_iterator):
         if idx == 0:
-            train_num = len(data.train_data_list)
+            if mode == 'train_loop': train_num = len(data.train_data_list)
+            elif mode == 'train_aug' : train_num = len(data.train_data_list)
             train_batch_num_per_epoch = int(train_num / (args.number_of_gpu * args.batch_size_per_gpu))+1
         idx += 1
 
@@ -100,18 +105,21 @@ def train(args, model,optimizer, scheduler, data,log, cuda_available, device, mo
         if (epoch_step+1) % args.gradient_accumulation_steps == 0 or (epoch_step + 1) == train_batch_num_per_epoch:
             optimizer.step()
     train_loss = train_loss / train_batch_num_per_epoch
-    
     return train_loss
 
-def evaluate(args,model,data,log, cuda_available, device):
+def evaluate(args,model,data,log, cuda_available, device, mode ):
     log.info('Evalation Session Start')
     model.eval()
     with torch.no_grad():
-        dev_batch_list = \
-        data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='dev')
-        dev_batch_num_per_epoch = len(dev_batch_list)
-        log.info ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
-        
+        if mode == 'eval_loop':
+            dev_batch_list = \
+            data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='dev')
+            dev_batch_num_per_epoch = len(dev_batch_list)
+            log.info ('Number of evaluation batches is %d' % dev_batch_num_per_epoch)
+            
+        elif mode == 'eval_aug':
+            pass
+            
         all_dev_result = []
         for p_dev_idx in range(dev_batch_num_per_epoch):
             if p_dev_idx%args.log_interval == 0: log.info(f'Evaluation {p_dev_idx*100/dev_batch_num_per_epoch:.2f} %')

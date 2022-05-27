@@ -64,6 +64,7 @@ def parse_config():
     parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     parser.add_argument("--augment", type=str, help="use augment or not")
+    parser.add_argument("--aug_epoch", type=int, default = 10, help="use augment or not")
     
     
     return parser.parse_args()
@@ -232,7 +233,7 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    if args.augment: pre_trainer = Aug_training(aug_num=2, change_rate=0.2)
+    if args.augment: pre_trainer = Aug_training(2, 0.2, data, 'cuda', log)
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
@@ -246,12 +247,11 @@ if __name__ == '__main__':
         log.info(f"Epoch {epoch} Tagging start")
         ####################### tagging ################################
         tagging(args,model,data,log, cuda_available, device)
-        
         ##################### training #################################
         student= load_model(args, data, cuda_available, load_pretrained = False)
         if args.augment:
-            augmented_data = pre_trainer.augment( data,  'cuda')
-            student = pre_trainer.train(student)
+            aug_train, aug_dev = pre_trainer.augment()
+            student = pre_trainer.train(args, aug_train, aug_dev,student, args.aug_epoch, optimizer, scheduler)
         optimizer, scheduler = load_optimizer(student, args)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
@@ -261,7 +261,7 @@ if __name__ == '__main__':
             log.info (f'Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
             
             log.info (f'Epoch {epoch}-{mini_epoch} evaluate start')
-            all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
+            all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device, mode = 'eval_loop')
             log.info (f'Epoch {epoch}-{mini_epoch} JGA is {dev_score}')
             mini_score_list.append(f'{dev_score:.2f}')
             
