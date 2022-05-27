@@ -127,8 +127,8 @@ def load_model(args, data, cuda_available, load_pretrained = True):
     return model
 
 
-def load_optimizer(model, args,  specify_adafactor_lr):
-    optimizer, scheduler = get_optimizers(model, args, specify_adafactor_lr)
+def load_optimizer(model, args):
+    optimizer, scheduler = get_optimizers(model, args)
     optimizer.zero_grad()
     return optimizer, scheduler
     
@@ -225,13 +225,6 @@ if __name__ == '__main__':
     add_prefix = True
     add_special_decoder_token = True
 
-    if args.specify_adafactor_lr == 'True':
-        specify_adafactor_lr = True
-    elif args.specify_adafactor_lr == 'False':
-        specify_adafactor_lr = False
-    else:
-        raise Exception('Wrong Specify LR Mode!!!')
-
     log.info('Initialize dataclass')
     
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, \
@@ -242,7 +235,7 @@ if __name__ == '__main__':
     if args.augment: pre_trainer = Aug_training()
     
     model = load_model(args, data, cuda_available)
-    optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
+    optimizer, scheduler = load_optimizer(model, args)
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
     score_list = ["Best scores"]
@@ -259,12 +252,12 @@ if __name__ == '__main__':
         if args.augment:
             augmented_data = pre_trainer.augment( data, raw_data, labeled_data, change_rate, DEVICE)
             student = pre_trainer.train(student)
-        optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
+        optimizer, scheduler = load_optimizer(student, args)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
             log.info(f"Epoch {epoch}-{mini_epoch} training start")
-            train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
+            train_loss = train(args,student,optimizer, scheduler, data,log, cuda_available, device, mode = 'train_loop')
             log.info (f'Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
             
             log.info (f'Epoch {epoch}-{mini_epoch} evaluate start')

@@ -9,6 +9,7 @@ import json
 import ontology
 import random
 import os
+import pdb
 from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
 from dataclass_part import DSTMultiWozData
 from trainer_part import train, evaluate
@@ -35,10 +36,11 @@ class Aug_training:
             if not os.path.isdir(path): 
                 raise
 
-    def augment(self, raw_data, labeled_data, change_rate, device, aug_batch_size = 10):
+    def augment(self, raw_data, labeled_data, change_rate, device):
+        pdb.set_trace()
         raw_data = self.data.replace_label(raw_data, labeled_data)
         dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, self.aug_tokenizer, change_rate)
-        generated_dict= generate_new_text(self.aug_model, dial_turn_id_list, tokenized_masked_list, aug_batch_size, device)
+        generated_dict= generate_new_text(self.aug_model, dial_turn_id_list, tokenized_masked_list, self.aug_num, device)
         raw_data_similar = []
         for dial_idx, dial in enumerate(raw_data):
             if dial_idx%30 == 0 and dial_idx !=0: self.log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
@@ -52,13 +54,14 @@ class Aug_training:
                     similar_turn['mask'] = generated_dict[idx]['mask_text']
                     similar_dial.append(similar_turn)
                 raw_data_similar.append(similar_dial)
-        return raw_data_similar
+        # split to train and dev
+        return train, dev
     
-    def train(self, log, args, data, model, epoch, optimizer, scheduler, cuda_available, device, specify_adafactor_lr):
+    def train(self, log, args, data, model, epoch, optimizer, scheduler, cuda_available, device,):
         best_result = 0
         best_model = None
         for epoch in range(epoch):
-            train_loss = train(args,model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
+            train_loss = train(args,model,optimizer, scheduler, data,log, cuda_available, device, mode = 'train_aug')
             _, dev_score = evaluate(args,model,data,log, cuda_available, device)
             if dev_score > best_result:
                 best_model = model

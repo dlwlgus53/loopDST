@@ -70,9 +70,9 @@ def tagging(args,model,data,log, cuda_available, device):
     log.info(f"prior labeld data: {prev_labeled_data_len} unlabeld data: {tagging_data_num} saving :{labeled_cnt}")
     log.info(f"updated tagged data: {len(data.labeled_data)}")
     
-def train(args, model,optimizer, scheduler, data,log, cuda_available, device):
+def train(args, model,optimizer, scheduler, data,log, cuda_available, device, mode):
     model.train()
-    train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
+    train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode=mode)
     epoch_step, train_loss = 0, 0.
     for idx, (train_batch, _) in enumerate(train_iterator):
         if idx == 0:
