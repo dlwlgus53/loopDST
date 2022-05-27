@@ -232,7 +232,7 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    if args.augment: pre_trainer = Aug_training()
+    if args.augment: pre_trainer = Aug_training(aug_num=2, change_rate=0.2)
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
@@ -250,7 +250,7 @@ if __name__ == '__main__':
         ##################### training #################################
         student= load_model(args, data, cuda_available, load_pretrained = False)
         if args.augment:
-            augmented_data = pre_trainer.augment( data, raw_data, labeled_data, change_rate, DEVICE)
+            augmented_data = pre_trainer.augment( data,  'cuda')
             student = pre_trainer.train(student)
         optimizer, scheduler = load_optimizer(student, args)
             
@@ -281,7 +281,7 @@ if __name__ == '__main__':
     log_sentence.append(" ".join(score_list))    
     log.info(score_list)
     
-    with open(f'{args.ckpt_save_path}log.txt', 'w') as f:
+    with open(f'{args.ckpt_save_path}log.txt', 'a') as f:
         for item in log_sentence:
             f.write("%s\n" % item)
             

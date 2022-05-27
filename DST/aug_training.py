@@ -20,13 +20,14 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class Aug_training:
-    def __init__(self,aug_num):
+    def __init__(self,aug_num, change_rate):
         self.log = log_setting()
         DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
         self.aug_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
         self.aug_config = RobertaConfig()
         self.aug_model = RobertaForMaskedLM.from_pretrained('roberta-base').to(DEVICE)
         self.aug_num = aug_num
+        self.change_rate = change_rate
 
     
     def _makedirs(self, path): 
@@ -36,9 +37,8 @@ class Aug_training:
             if not os.path.isdir(path): 
                 raise
 
-    def augment(self, raw_data, labeled_data, change_rate, device):
-        pdb.set_trace()
-        raw_data = self.data.replace_label(raw_data, labeled_data)
+    def augment(self, data,device):
+        raw_data = self.data.replace_label(data.raw_data, data.labeled_data)
         dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, self.aug_tokenizer, change_rate)
         generated_dict= generate_new_text(self.aug_model, dial_turn_id_list, tokenized_masked_list, self.aug_num, device)
         raw_data_similar = []
