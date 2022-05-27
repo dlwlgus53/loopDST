@@ -34,7 +34,7 @@ def tagging(args,model,data,log, cuda_available, device):
         for idx, (tagging_batch, dial_turn_key_batch) in enumerate(tagging_iterator):
             if idx  == 0:
                 tagging_data_num = len(data.tagging_data_list)
-                tagging_batch_num_per_epoch = int(tagging_data_num / (args.number_of_gpu * args.batch_size_per_gpu))
+                tagging_batch_num_per_epoch = int(tagging_data_num / (args.number_of_gpu * args.batch_size_per_gpu))+1
                 log.info(f"unlabeled data num : {tagging_data_num}")
 
             if idx%args.log_interval == 0: log.info(f'Tagged {idx* 100/tagging_batch_num_per_epoch:.2f} %')       
@@ -59,6 +59,7 @@ def tagging(args,model,data,log, cuda_available, device):
     while confidence_que.empty() != True:
         labeled_cnt +=1
         key, value = confidence_que.get()[1]
+        assert key not in labeled_data
         labeled_data[key] = value
         if labeled_cnt>qsize*args.confidence_percent:
             break
@@ -76,7 +77,7 @@ def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_
     for idx, (train_batch, _) in enumerate(train_iterator):
         if idx == 0:
             train_num = len(data.train_data_list)
-            train_batch_num_per_epoch = int(train_num / (args.number_of_gpu * args.batch_size_per_gpu))
+            train_batch_num_per_epoch = int(train_num / (args.number_of_gpu * args.batch_size_per_gpu))+1
         idx += 1
 
         if idx%100 == 0: log.info(f'Training {idx*100/train_batch_num_per_epoch:.2f} %')
