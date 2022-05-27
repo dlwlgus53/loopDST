@@ -73,22 +73,6 @@ def get_overlap_position(input_ids, label_ids):
     return overlap_index
 
 
-# def mask_to_text(tokenizer, mask_arr, tokenized_input):
-#     selection = torch.flatten((mask_arr).nonzero())
-#     tokenized_input.input_ids[0,selection] = model_special_tokens['mask'] # true인 부분을 mask token으로 바꿔주고
-#     outputs = model(**tokenized_input) # 모델에 넣어서
-#     prediction = torch.argmax(outputs.logits, dim = -1) # 결과를 얻는다.
-#     new_text = tokenizer.decode(prediction[0]) # masked
-#     new_text = new_text.replace('<s>','')
-#     new_text = new_text.replace('</s>','')
-#     new_text = new_text.replace('\'',' \'')
-#     new_text = new_text.replace('.',' .')
-#     new_text = new_text.replace('?',' ?')
-#     new_text = new_text.replace('!',' !')
-#     new_text = new_text.lower()
-#     return new_text
-
-
 
 def get_mask_arr(overlap_position, input_ids, start_token, end_token, change_rate):
     mask_arr = torch.zeros(input_ids.shape)
@@ -149,6 +133,7 @@ def get_will_change_item(raw_data, tokenizer, change_rate):
         if dial_idx%30 == 0 and dial_idx !=0:
             log.info(f'tokenize : {dial_idx}/{len(raw_data)} done')
         for turn in dial:
+            # 라벨에 없으면 만들지 말고 패스! 를 언젠간 구현하자
             for n in range(args.topn):
                 dial_turn_key = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
                 text = turn['user']

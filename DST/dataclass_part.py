@@ -218,7 +218,7 @@ class DSTMultiWozData:
         return new_data
     
     def replace_label(self, raw, label):
-        new_raw = copy.deep_copy(raw)
+        new_raw = copy.deepcopy(raw)
         for dial in new_raw:
             for turn in dial:
                 dial_turn_key = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])

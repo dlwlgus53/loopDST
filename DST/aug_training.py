@@ -47,7 +47,9 @@ class Aug_training:
             for n in range(self.aug_num):
                 similar_dial = []
                 for turn in dial:
-                    idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n-1)
+                    pdb.set_trace()
+                    # 여기서 원본 저장하도록 하면 된다 하면~ 된다!!
+                    idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
                     similar_turn = copy.deepcopy(turn)
                     similar_turn['dial_id'] += f'_v{str(n)}'
                     similar_turn['user'] = generated_dict[idx]['text']
