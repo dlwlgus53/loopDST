@@ -112,7 +112,7 @@ class DSTMultiWozData:
                 res_token_id_list.append(one_id)
         return res_token_id_list
 
-    def tokenize_raw_data(self, raw_data_list, bspn_filter = False): # TODO also get labeld data list and answer
+    def tokenize_raw_data(self, raw_data_list): # TODO also get labeld data list and answer
         data_num = len(raw_data_list)
         all_session_list = []
         for idx in range(data_num):
@@ -234,7 +234,7 @@ class DSTMultiWozData:
             self.train_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.train_data_list 
         elif mode == 'tagging':
-            raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
+            # raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
             self.tagging_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.tagging_data_list
         else:
@@ -243,6 +243,7 @@ class DSTMultiWozData:
         
         for item in all_data_list:  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
+            if mode == 'tagging' and dial_turn_key in self.labeled_data : continue
             if mode == 'train_loop' and dial_turn_key not in self.labeled_data : continue
             all_input_data_list.append(item['bs_input'])
             all_output_data_list.append(item['bs_output'])
