@@ -46,7 +46,6 @@ def parse_config():
     parser.add_argument('--init_label_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     # training configuration
     parser.add_argument('--optimizer_name', default='adafactor', type=str, help='which optimizer to use during training, adam or adafactor')
-    parser.add_argument('--specify_adafactor_lr', type=str, default='True', help='True or False, whether specify adafactor lr')
     parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.")
     parser.add_argument("--learning_rate", default=1e-3, type=float, help="The initial learning rate for Adam.")
@@ -69,7 +68,7 @@ def parse_config():
     
     return parser.parse_args()
 
-def get_optimizers(model, args, specify_adafactor_lr):
+def get_optimizers(model, args):
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
@@ -91,29 +90,20 @@ def get_optimizers(model, args, specify_adafactor_lr):
         pass
     elif args.optimizer_name == 'adafactor':
         from transformers.optimization import Adafactor, AdafactorSchedule
-        if specify_adafactor_lr:
-            optimizer = Adafactor(
-                optimizer_grouped_parameters,
-                lr=1e-3,
-                eps=(1e-30, 1e-3),
-                clip_threshold=1.0,
-                decay_rate=-0.8,
-                beta1=None,
-                weight_decay=0.0,
-                relative_step=False,
-                scale_parameter=False,
-                warmup_init=False
-            )
-            scheduler = None
-        else:
-            optimizer = Adafactor(optimizer_grouped_parameters, 
-                scale_parameter=True, 
-                relative_step=True, 
-                warmup_init=True, 
-                lr=None)
-            scheduler = AdafactorSchedule(optimizer)
-    else:
-        raise Exception('Wrong Optimizer Name!!!')
+        optimizer = Adafactor(
+            optimizer_grouped_parameters,
+            lr=1e-3,
+            eps=(1e-30, 1e-3),
+            clip_threshold=1.0,
+            decay_rate=-0.8,
+            beta1=None,
+            weight_decay=0.0,
+            relative_step=False,
+            scale_parameter=False,
+            warmup_init=False
+        )
+        scheduler = None
+
     return optimizer, scheduler
 
 def load_model(args, data, cuda_available, load_pretrained = True):
@@ -267,7 +257,7 @@ if __name__ == '__main__':
         ##################### training #################################
         student= load_model(args, data, cuda_available, load_pretrained = False)
         if args.augment:
-            augmented_data = pre_trainer.augment(raw_data, labeled_data, change_rate, DEVICE)
+            augmented_data = pre_trainer.augment( data, raw_data, labeled_data, change_rate, DEVICE)
             student = pre_trainer.train(student)
         optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
             

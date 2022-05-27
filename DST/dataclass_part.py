@@ -218,12 +218,13 @@ class DSTMultiWozData:
         return new_data
     
     def replace_label(self, raw, label):
-        for dial in raw:
+        new_raw = raw.deep_copy(raw)
+        for dial in new_raw:
             for turn in dial:
                 dial_turn_key = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
                 if dial_turn_key in label:
                     turn['bspn'] = label[dial_turn_key]
-        return raw
+        return new_raw
         
         
     def get_filtered_batches(self, batch_size, mode): 

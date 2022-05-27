@@ -70,7 +70,7 @@ def tagging(args,model,data,log, cuda_available, device):
     log.info(f"prior labeld data: {prev_labeled_data_len} unlabeld data: {tagging_data_num} saving :{labeled_cnt}")
     log.info(f"updated tagged data: {len(data.labeled_data)}")
     
-def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device):
+def train(args, model,optimizer, scheduler, data,log, cuda_available, device):
     model.train()
     train_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode='train_loop')
     epoch_step, train_loss = 0, 0.
@@ -99,13 +99,6 @@ def train(args, model,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_
 
         if (epoch_step+1) % args.gradient_accumulation_steps == 0 or (epoch_step + 1) == train_batch_num_per_epoch:
             optimizer.step()
-            if args.optimizer_name == 'adafactor' and not specify_adafactor_lr:
-                scheduler.step()
-            elif args.optimizer_name == 'adam':
-                scheduler.step() # only update learning rate when using adam
-            else:
-                pass
-            optimizer.zero_grad()
     train_loss = train_loss / train_batch_num_per_epoch
     
     return train_loss
