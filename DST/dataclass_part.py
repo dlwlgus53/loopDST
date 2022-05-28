@@ -246,7 +246,6 @@ class DSTMultiWozData:
         else:
             raise Exception('Wrong Mode!!!')
         all_input_data_list, all_output_data_list, all_index_list = [], [], []
-        
         for item in all_data_list:  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
             if mode == 'tagging' and dial_turn_key in self.labeled_data : continue
@@ -254,7 +253,6 @@ class DSTMultiWozData:
             if mode == 'train_aug':
                 dial_turn_key =  '[d]'+item['dial_id'].split("_")[0] + '[t]' + str(item['turn_num'])
                 if dial_turn_key not in self.labeled_data : continue
-            
             all_input_data_list.append(item['bs_input'])
             all_output_data_list.append(item['bs_output'])
             all_index_list.append(dial_turn_key)
@@ -277,6 +275,7 @@ class DSTMultiWozData:
             one_idx = one_index_list
             batch_list.append(one_batch)
             idx_list.append(one_idx)
+        # Train aug에서 애매한 이유 : dev로 빠지기 때문
         out_str = 'Overall Number of datapoints of ' + mode + ' is ' + str(data_num) + \
         ' and batches is ' + str(len(batch_list))
         self.log.info (out_str)
