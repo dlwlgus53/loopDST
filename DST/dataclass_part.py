@@ -61,12 +61,12 @@ class DSTMultiWozData:
             
         self.labeled_data = copy.deepcopy(self.init_labeled_data)
                             
-        train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' 
+        train_json_path = data_path_prefix + '/multiwoz-fine-processed-train-1.json' 
         dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
         test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
         
         if self.debugging : 
-            small_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
+            small_path = data_path_prefix + '/multiwoz-fine-processed-small-1.json' 
             train_json_path = dev_json_path = test_json_path = small_path
 
         with open(train_json_path) as f:
@@ -118,7 +118,6 @@ class DSTMultiWozData:
         for idx in range(data_num):
             one_sess_list = []
             for turn in raw_data_list[idx]: 
-                
                 one_turn_dict = {}
                 for key in turn:
                     if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db']:
@@ -202,7 +201,7 @@ class DSTMultiWozData:
 
 
     def make_data_list(self, raw_data):
-        data_id_list = self.tokenize_raw_data(copy.deepcopy(raw_data)) # give labled data list too
+        data_id_list = self.tokenize_raw_data(raw_data) # give labled data list too
         data_list = self.flatten_data(data_id_list)
         return data_list
 
@@ -235,9 +234,15 @@ class DSTMultiWozData:
             self.train_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.train_data_list 
         elif mode == 'tagging':
+            raw_data= copy.deepcopy(self.train_raw_data)
             # raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
-            self.tagging_data_list = self.make_data_list(self.train_raw_data,) # make dataset with labeled data
+            self.tagging_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.tagging_data_list
+        elif mode == 'train_aug':
+            raw_data = self.replace_label(self.train_aug_raw_data, self.labeled_data)
+            self.train_aug_data_list = self.make_data_list(raw_data) # make dataset with labeled data
+            all_data_list = self.train_aug_data_list
+            
         else:
             raise Exception('Wrong Mode!!!')
         all_input_data_list, all_output_data_list, all_index_list = [], [], []
@@ -356,10 +361,12 @@ class DSTMultiWozData:
         return batch_list
 
     def build_all_evaluation_batch_list(self, eva_batch_size, eva_mode):
-        if eva_mode == 'dev':
+        if eva_mode == 'dev_loop':
             data_list = self.dev_data_list
         elif eva_mode == 'test':
             data_list = self.test_data_list
+        elif eva_mode == 'dev_aug':
+            data_list = self.dev_aug_data_list
         else:
             raise Exception('Wrong Evaluation Mode!!!')
         
@@ -385,8 +392,9 @@ class DSTMultiWozData:
 
 
 ############################### aug #################################
-def set_train_aug(self, train_aug_data):
-    pass
+    def set_train_aug(self, train_aug_data):
+        # 원래 데이터의 2배가 아닌 이유 : 10% 는 DEV로 사용하기 때문
+        self.train_aug_raw_data = train_aug_data
 
-def set_eval_aug(self, dev_aug_data):
-    pass
+    def set_eval_aug(self, dev_aug_data):
+        self.dev_aug_data_list = self.make_data_list(raw_data = dev_aug_data)

@@ -64,7 +64,7 @@ def parse_config():
     parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     parser.add_argument("--augment", type=str, help="use augment or not")
-    parser.add_argument("--aug_epoch", type=int, default = 10, help="use augment or not")
+    parser.add_argument("--aug_epoch", type=int, default = 1, help="use augment or not")
     
     
     return parser.parse_args()
@@ -233,7 +233,7 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    if args.augment: pre_trainer = Aug_training(2, 0.2, data, 'cuda', log)
+    if args.augment: pre_trainer = Aug_training(2, 0.2, data, 'cuda', log, args.log_interval)
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
@@ -261,7 +261,7 @@ if __name__ == '__main__':
             log.info (f'Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
             
             log.info (f'Epoch {epoch}-{mini_epoch} evaluate start')
-            all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device, mode = 'eval_loop')
+            all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device, mode = 'dev_loop')
             log.info (f'Epoch {epoch}-{mini_epoch} JGA is {dev_score}')
             mini_score_list.append(f'{dev_score:.2f}')
             

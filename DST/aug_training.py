@@ -20,7 +20,7 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class Aug_training:
-    def __init__(self,aug_num, change_rate, data, device, log):
+    def __init__(self,aug_num, change_rate, data, device, log,log_interval):
         log_setting("aug_log")
         DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
         self.aug_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
@@ -31,6 +31,7 @@ class Aug_training:
         self.log = log
         self.data = data
         self.device = device
+        self.log_interval = log_interval
     
     def _makedirs(self, path): 
         try: 
@@ -42,10 +43,9 @@ class Aug_training:
     def augment(self):
         raw_data = self.data.replace_label(self.data.train_raw_data, self.data.labeled_data)
         id_list, masked_list = get_will_change_item(raw_data, self.aug_tokenizer, self.change_rate, self.aug_num, self.log)
-        generated_dict= generate_new_text(self.aug_model, self.aug_tokenizer, id_list, masked_list, self.aug_num, self.device, self.log)
+        generated_dict= generate_new_text(self.aug_model, self.aug_tokenizer, id_list, masked_list, self.aug_num, self.device, self.log, self.log_interval)
         raw_data_similar = []
-        for dial_idx, dial in enumerate(raw_data):
-            if dial_idx%30 == 0 and dial_idx !=0: self.log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
+        for _, dial in enumerate(raw_data):
             for n in range(self.aug_num):
                 similar_dial = []
                 for turn in dial:
@@ -69,10 +69,9 @@ class Aug_training:
         best_model = None
         self.data.set_train_aug(train_data)
         self.data.set_eval_aug(dev_data)
-
         for epoch in range(epoch):
-            train_loss = train(args,model,optimizer, scheduler, self.data,self.log, cuda_available = True,  mode = 'train_aug')
-            _, dev_score = evaluate(args,model,self.data,self.log, cuda_available = True, device = device,  mode = 'eval_aug')
+            train_loss = train(args,model,optimizer, scheduler, self.data,self.log, cuda_available = True,  device = device, mode = 'train_aug')
+            _, dev_score = evaluate(args,model,self.data,self.log, cuda_available = True, device = device,  mode = 'dev_aug')
             if dev_score > best_result:
                 best_model = model
                 best_result = dev_score
