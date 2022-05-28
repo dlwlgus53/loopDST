@@ -72,6 +72,7 @@ class Aug_training:
         for epoch in range(epoch):
             train_loss = train(args,model,optimizer, scheduler, self.data,self.log, cuda_available = True,  device = device, mode = 'train_aug')
             _, dev_score = evaluate(args,model,self.data,self.log, cuda_available = True, device = device,  mode = 'dev_aug')
+            self.log.info(f"Aug JGA : {dev_score:.2f}")
             if dev_score > best_result:
                 best_model = model
                 best_result = dev_score
