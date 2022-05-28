@@ -52,7 +52,12 @@ def parse_config():
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
+    
     parser.add_argument("--epoch_num", default=60, type=int, help="Total number of training epochs to perform.")
+    parser.add_argument("--mini_epoch",  default=5, type=int,help="mini epoch")
+    parser.add_argument("--aug_epoch", default = 1,  type=int, help="use augment or not")
+    
+    
     parser.add_argument("--batch_size_per_gpu", type=int, default=4, help='Batch size for each gpu.')  
     parser.add_argument("--eval_batch_size_per_gpu", type=int, default=8, help='Batch size for each gpu.')  
     parser.add_argument("--number_of_gpu", type=int, default=8, help="Number of available GPUs.")  
@@ -61,10 +66,8 @@ def parse_config():
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
-    parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
-    parser.add_argument("--augment", type=str, help="use augment or not")
-    parser.add_argument("--aug_epoch", type=int, default = 1, help="use augment or not")
+    parser.add_argument("--augment", type=int, help="use augment or not")
     
     
     return parser.parse_args()

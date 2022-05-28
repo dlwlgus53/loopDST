@@ -250,7 +250,10 @@ class DSTMultiWozData:
         for item in all_data_list:  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
             if mode == 'tagging' and dial_turn_key in self.labeled_data : continue
-            if mode.startswith("train") and dial_turn_key not in self.labeled_data : continue
+            if mode == 'train' and dial_turn_key not in self.labeled_data : continue
+            if mode == 'train_aug':
+                dial_turn_key =  '[d]'+item['dial_id'].split("_")[0] + '[t]' + str(item['turn_num'])
+                if dial_turn_key not in self.labeled_data : continue
             
             all_input_data_list.append(item['bs_input'])
             all_output_data_list.append(item['bs_output'])
