@@ -73,22 +73,6 @@ def get_overlap_position(input_ids, label_ids):
     return overlap_index
 
 
-# def mask_to_text(tokenizer, mask_arr, tokenized_input):
-#     selection = torch.flatten((mask_arr).nonzero())
-#     tokenized_input.input_ids[0,selection] = model_special_tokens['mask'] # true인 부분을 mask token으로 바꿔주고
-#     outputs = model(**tokenized_input) # 모델에 넣어서
-#     prediction = torch.argmax(outputs.logits, dim = -1) # 결과를 얻는다.
-#     new_text = tokenizer.decode(prediction[0]) # masked
-#     new_text = new_text.replace('<s>','')
-#     new_text = new_text.replace('</s>','')
-#     new_text = new_text.replace('\'',' \'')
-#     new_text = new_text.replace('.',' .')
-#     new_text = new_text.replace('?',' ?')
-#     new_text = new_text.replace('!',' !')
-#     new_text = new_text.lower()
-#     return new_text
-
-
 
 def get_mask_arr(overlap_position, input_ids, start_token, end_token, change_rate):
     mask_arr = torch.zeros(input_ids.shape)
@@ -108,8 +92,10 @@ def makedirs(path):
        if not os.path.isdir(path): 
            raise    
     
-def log_setting():
-    log = logging.getLogger('my_log')
+def log_setting(name = None):
+    if not name :
+        name = "aug"
+    log = logging.getLogger('name')
     log.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
     
@@ -142,14 +128,12 @@ def tokenize(input_text,label, tokenizer, change_rate):
         tokenized_input.input_ids[0,mask_position] = mask_idx 
     return tokenized_input.input_ids[0].tolist()
 
-def get_will_change_item(raw_data, tokenizer, change_rate):
+def get_will_change_item(raw_data, tokenizer, change_rate, topn, log):
     tokenized_masked_list = []
     dial_turn_id_list = []
     for dial_idx, dial in enumerate(raw_data):
-        if dial_idx%30 == 0 and dial_idx !=0:
-            log.info(f'tokenize : {dial_idx}/{len(raw_data)} done')
         for turn in dial:
-            for n in range(args.topn):
+            for n in range(topn):
                 dial_turn_key = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
                 text = turn['user']
                 label = turn['bspn']
@@ -159,13 +143,14 @@ def get_will_change_item(raw_data, tokenizer, change_rate):
     return dial_turn_id_list, tokenized_masked_list
 
 
-def generate_new_text(model, dial_turn_id_list, tokenized_masked_list, batch_size, DEVICE):
-
+def generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, batch_size, DEVICE,log, log_interval=None):
+    if not log_interval:
+        log_interval = 100
     start = 0    
     generated_dict = {}
     count_dict = defaultdict(int) # default dict
     while True:
-        if start %30 ==0:
+        if start %log_interval ==0:
             log.info(f"generate new text {start}/{len(dial_turn_id_list)} done")
         batch_id  = dial_turn_id_list[start:start+batch_size]
         batch  = tokenized_masked_list[start:start+batch_size]
@@ -233,8 +218,8 @@ if __name__ == '__main__':
         raw_data = json.load(f)
         
     raw_data = filtering_data(raw_data, init_labeled_data)
-    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, args.change_rate)
-    generated_dict= generate_new_text(model, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE)
+    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, args.change_rate, args.topn,log)
+    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE, log)
     raw_data_similar = []
     
     for dial_idx, dial in enumerate(raw_data):

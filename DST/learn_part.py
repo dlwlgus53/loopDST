@@ -4,21 +4,17 @@ import json
 import torch
 import random
 import argparse
-import operator
 import torch.nn as nn
 from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
-from inference_utlis import batch_generate
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
 import logging.handlers
-import copy
 from trainer_part import tagging, train, evaluate
 from modelling.T5Model import T5Gen_Model
 from dataclass_part import DSTMultiWozData
-
-# from aug_training_class import aug_training
+from aug_training import Aug_training
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -50,14 +46,18 @@ def parse_config():
     parser.add_argument('--init_label_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     # training configuration
     parser.add_argument('--optimizer_name', default='adafactor', type=str, help='which optimizer to use during training, adam or adafactor')
-    parser.add_argument('--specify_adafactor_lr', type=str, default='True', help='True or False, whether specify adafactor lr')
     parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.")
     parser.add_argument("--learning_rate", default=1e-3, type=float, help="The initial learning rate for Adam.")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
+    
     parser.add_argument("--epoch_num", default=60, type=int, help="Total number of training epochs to perform.")
+    parser.add_argument("--mini_epoch",  default=5, type=int,help="mini epoch")
+    parser.add_argument("--aug_epoch", default = 1,  type=int, help="use augment or not")
+    
+    
     parser.add_argument("--batch_size_per_gpu", type=int, default=4, help='Batch size for each gpu.')  
     parser.add_argument("--eval_batch_size_per_gpu", type=int, default=8, help='Batch size for each gpu.')  
     parser.add_argument("--number_of_gpu", type=int, default=8, help="Number of available GPUs.")  
@@ -66,13 +66,13 @@ def parse_config():
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
-    parser.add_argument("--mini_epoch", type=int, default=5, help="mini epoch")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
+    parser.add_argument("--augment", type=int, help="use augment or not")
     
     
     return parser.parse_args()
 
-def get_optimizers(model, args, specify_adafactor_lr):
+def get_optimizers(model, args):
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
@@ -94,29 +94,20 @@ def get_optimizers(model, args, specify_adafactor_lr):
         pass
     elif args.optimizer_name == 'adafactor':
         from transformers.optimization import Adafactor, AdafactorSchedule
-        if specify_adafactor_lr:
-            optimizer = Adafactor(
-                optimizer_grouped_parameters,
-                lr=1e-3,
-                eps=(1e-30, 1e-3),
-                clip_threshold=1.0,
-                decay_rate=-0.8,
-                beta1=None,
-                weight_decay=0.0,
-                relative_step=False,
-                scale_parameter=False,
-                warmup_init=False
-            )
-            scheduler = None
-        else:
-            optimizer = Adafactor(optimizer_grouped_parameters, 
-                scale_parameter=True, 
-                relative_step=True, 
-                warmup_init=True, 
-                lr=None)
-            scheduler = AdafactorSchedule(optimizer)
-    else:
-        raise Exception('Wrong Optimizer Name!!!')
+        optimizer = Adafactor(
+            optimizer_grouped_parameters,
+            lr=1e-3,
+            eps=(1e-30, 1e-3),
+            clip_threshold=1.0,
+            decay_rate=-0.8,
+            beta1=None,
+            weight_decay=0.0,
+            relative_step=False,
+            scale_parameter=False,
+            warmup_init=False
+        )
+        scheduler = None
+
     return optimizer, scheduler
 
 def load_model(args, data, cuda_available, load_pretrained = True):
@@ -140,8 +131,8 @@ def load_model(args, data, cuda_available, load_pretrained = True):
     return model
 
 
-def load_optimizer(model, args,  specify_adafactor_lr):
-    optimizer, scheduler = get_optimizers(model, args, specify_adafactor_lr)
+def load_optimizer(model, args):
+    optimizer, scheduler = get_optimizers(model, args)
     optimizer.zero_grad()
     return optimizer, scheduler
     
@@ -150,7 +141,6 @@ def save_result(epoch, model, one_dev_str,all_dev_result):
     log.info ('Saving Model...')
     model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
 
-    import os
     if os.path.exists(model_save_path):
         pass
     else: # recursively construct directory
@@ -166,8 +156,6 @@ def save_result(epoch, model, one_dev_str,all_dev_result):
     with open(pkl_save_path, 'w') as outfile:
         json.dump(all_dev_result, outfile, indent=4)
 
-    import os
-    from operator import itemgetter
     fileData = {}
     test_output_dir = args.ckpt_save_path
     for fname in os.listdir(test_output_dir):
@@ -194,7 +182,6 @@ def makedirs(path):
        if not os.path.isdir(path): 
            raise
 
-import argparse
 if __name__ == '__main__':
     log_sentence = []
     # MAKE FOLDER
@@ -242,13 +229,6 @@ if __name__ == '__main__':
     add_prefix = True
     add_special_decoder_token = True
 
-    if args.specify_adafactor_lr == 'True':
-        specify_adafactor_lr = True
-    elif args.specify_adafactor_lr == 'False':
-        specify_adafactor_lr = False
-    else:
-        raise Exception('Wrong Specify LR Mode!!!')
-
     log.info('Initialize dataclass')
     
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, \
@@ -256,10 +236,10 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    # pre_trainer = aug_training()
+    if args.augment: pre_trainer = Aug_training(2, 0.2, data, 'cuda', log, args.log_interval)
     
     model = load_model(args, data, cuda_available)
-    optimizer, scheduler = load_optimizer(model, args,  specify_adafactor_lr)
+    optimizer, scheduler = load_optimizer(model, args)
     min_dev_loss = 1e10
     max_dev_score, max_dev_str = 0., ''
     score_list = ["Best scores"]
@@ -268,21 +248,23 @@ if __name__ == '__main__':
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         log_sentence.append(f"Epoch {epoch}")
         log.info(f"Epoch {epoch} Tagging start")
+        ####################### tagging ################################
         tagging(args,model,data,log, cuda_available, device)
+        ##################### training #################################
         student= load_model(args, data, cuda_available, load_pretrained = False)
-        # if args.augment:
-        #     augmented_data = pre_trainer.augment(raw_data, labeled_data, change_rate, DEVICE)
-        #     student = pre_trainer.train(student)
-        optimizer, scheduler = load_optimizer(student, args,  specify_adafactor_lr)
+        if args.augment:
+            aug_train, aug_dev = pre_trainer.augment()
+            student = pre_trainer.train(args, aug_train, aug_dev,student, args.aug_epoch, optimizer, scheduler)
+        optimizer, scheduler = load_optimizer(student, args)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
             log.info(f"Epoch {epoch}-{mini_epoch} training start")
-            train_loss = train(args,student,optimizer, scheduler,specify_adafactor_lr, data,log, cuda_available, device)
+            train_loss = train(args,student,optimizer, scheduler, data,log, cuda_available, device, mode = 'train_loop')
             log.info (f'Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
             
             log.info (f'Epoch {epoch}-{mini_epoch} evaluate start')
-            all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device)
+            all_dev_result, dev_score = evaluate(args,student,data,log, cuda_available, device, mode = 'dev_loop')
             log.info (f'Epoch {epoch}-{mini_epoch} JGA is {dev_score}')
             mini_score_list.append(f'{dev_score:.2f}')
             
@@ -302,7 +284,7 @@ if __name__ == '__main__':
     log_sentence.append(" ".join(score_list))    
     log.info(score_list)
     
-    with open(f'{args.ckpt_save_path}log.txt', 'w') as f:
+    with open(f'{args.ckpt_save_path}log.txt', 'a') as f:
         for item in log_sentence:
             f.write("%s\n" % item)
             

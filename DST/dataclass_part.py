@@ -61,12 +61,12 @@ class DSTMultiWozData:
             
         self.labeled_data = copy.deepcopy(self.init_labeled_data)
                             
-        train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json' 
+        train_json_path = data_path_prefix + '/multiwoz-fine-processed-train-1.json' 
         dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
         test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
         
         if self.debugging : 
-            small_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
+            small_path = data_path_prefix + '/multiwoz-fine-processed-small-1.json' 
             train_json_path = dev_json_path = test_json_path = small_path
 
         with open(train_json_path) as f:
@@ -112,13 +112,12 @@ class DSTMultiWozData:
                 res_token_id_list.append(one_id)
         return res_token_id_list
 
-    def tokenize_raw_data(self, raw_data_list, bspn_filter = False): # TODO also get labeld data list and answer
+    def tokenize_raw_data(self, raw_data_list): # TODO also get labeld data list and answer
         data_num = len(raw_data_list)
         all_session_list = []
         for idx in range(data_num):
             one_sess_list = []
             for turn in raw_data_list[idx]: 
-                
                 one_turn_dict = {}
                 for key in turn:
                     if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db']:
@@ -202,7 +201,7 @@ class DSTMultiWozData:
 
 
     def make_data_list(self, raw_data):
-        data_id_list = self.tokenize_raw_data(copy.deepcopy(raw_data)) # give labled data list too
+        data_id_list = self.tokenize_raw_data(raw_data) # give labled data list too
         data_list = self.flatten_data(data_id_list)
         return data_list
 
@@ -218,12 +217,13 @@ class DSTMultiWozData:
         return new_data
     
     def replace_label(self, raw, label):
-        for dial in raw:
+        new_raw = copy.deepcopy(raw)
+        for dial in new_raw:
             for turn in dial:
                 dial_turn_key = '[d]'+turn['dial_id'] + '[t]' + str(turn['turn_num'])
                 if dial_turn_key in label:
                     turn['bspn'] = label[dial_turn_key]
-        return raw
+        return new_raw
         
         
     def get_filtered_batches(self, batch_size, mode): 
@@ -234,16 +234,25 @@ class DSTMultiWozData:
             self.train_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.train_data_list 
         elif mode == 'tagging':
-            raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
+            raw_data= copy.deepcopy(self.train_raw_data)
+            # raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
             self.tagging_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.tagging_data_list
+        elif mode == 'train_aug':
+            raw_data = self.replace_label(self.train_aug_raw_data, self.labeled_data)
+            self.train_aug_data_list = self.make_data_list(raw_data) # make dataset with labeled data
+            all_data_list = self.train_aug_data_list
+            
         else:
             raise Exception('Wrong Mode!!!')
         all_input_data_list, all_output_data_list, all_index_list = [], [], []
-        
         for item in all_data_list:  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
-            if mode == 'train_loop' and dial_turn_key not in self.labeled_data : continue
+            if mode == 'tagging' and dial_turn_key in self.labeled_data : continue
+            if mode == 'train' and dial_turn_key not in self.labeled_data : continue
+            if mode == 'train_aug':
+                dial_turn_key =  '[d]'+item['dial_id'].split("_")[0] + '[t]' + str(item['turn_num'])
+                if dial_turn_key not in self.labeled_data : continue
             all_input_data_list.append(item['bs_input'])
             all_output_data_list.append(item['bs_output'])
             all_index_list.append(dial_turn_key)
@@ -266,6 +275,7 @@ class DSTMultiWozData:
             one_idx = one_index_list
             batch_list.append(one_batch)
             idx_list.append(one_idx)
+        # Train aug에서 애매한 이유 : dev로 빠지기 때문
         out_str = 'Overall Number of datapoints of ' + mode + ' is ' + str(data_num) + \
         ' and batches is ' + str(len(batch_list))
         self.log.info (out_str)
@@ -354,15 +364,17 @@ class DSTMultiWozData:
         return batch_list
 
     def build_all_evaluation_batch_list(self, eva_batch_size, eva_mode):
-        if eva_mode == 'dev':
+        if eva_mode == 'dev_loop':
             data_list = self.dev_data_list
         elif eva_mode == 'test':
             data_list = self.test_data_list
+        elif eva_mode == 'dev_aug':
+            data_list = self.dev_aug_data_list
         else:
             raise Exception('Wrong Evaluation Mode!!!')
         
         all_bs_input_id_list, all_parse_dict_list = [], []
-        for i, item in enumerate(data_list):
+        for _, item in enumerate(data_list):
             one_bs_input_id_list, one_parse_dict = self.parse_one_eva_instance(item)
             all_bs_input_id_list.append(one_bs_input_id_list)
             all_parse_dict_list.append(one_parse_dict)
@@ -380,3 +392,12 @@ class DSTMultiWozData:
             else:
                 final_batch_list.append(one_final_batch)
         return final_batch_list
+
+
+############################### aug #################################
+    def set_train_aug(self, train_aug_data):
+        # 원래 데이터의 2배가 아닌 이유 : 10% 는 DEV로 사용하기 때문
+        self.train_aug_raw_data = train_aug_data
+
+    def set_eval_aug(self, dev_aug_data):
+        self.dev_aug_data_list = self.make_data_list(raw_data = dev_aug_data)
