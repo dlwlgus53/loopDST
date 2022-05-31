@@ -56,6 +56,8 @@ def parse_config():
     parser.add_argument("--epoch_num", default=60, type=int, help="Total number of training epochs to perform.")
     parser.add_argument("--mini_epoch",  default=5, type=int,help="mini epoch")
     parser.add_argument("--aug_epoch", default = 1,  type=int, help="use augment or not")
+    parser.add_argument("--aug_num", default = 2,  type=int, help="use augment or not")
+    
     
     
     parser.add_argument("--batch_size_per_gpu", type=int, default=4, help='Batch size for each gpu.')  
@@ -199,7 +201,6 @@ if __name__ == '__main__':
         pass
  
     args = parse_config()
-    log.info(args)
     
     device = torch.device('cuda')
     makedirs(args.ckpt_save_path)
@@ -214,6 +215,8 @@ if __name__ == '__main__':
     log.addHandler(streamHandler)
     
     log.info('seed setting')
+    log.info(args)
+    
     init_experiment(args)
     
     
@@ -236,7 +239,7 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    if args.augment: pre_trainer = Aug_training(2, 0.2, data, 'cuda', log, args.log_interval)
+    if args.augment: pre_trainer = Aug_training(args.aug_num, 0.2, data, 'cuda', log, args.log_interval)
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
@@ -252,10 +255,10 @@ if __name__ == '__main__':
         tagging(args,model,data,log, cuda_available, device)
         ##################### training #################################
         student= load_model(args, data, cuda_available, load_pretrained = False)
+        optimizer, scheduler = load_optimizer(student, args) # 이거 바꿨음.. 새걸로
         if args.augment:
             aug_train, aug_dev = pre_trainer.augment()
             student = pre_trainer.train(args, aug_train, aug_dev,student, args.aug_epoch, optimizer, scheduler)
-        optimizer, scheduler = load_optimizer(student, args)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
         for mini_epoch in range(args.mini_epoch):
