@@ -20,9 +20,6 @@ log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
 
-
-
-
 def init_experiment(args):
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
@@ -31,7 +28,6 @@ def init_experiment(args):
     torch.cuda.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed) # if use multi-GPU
     
-
 def parse_config():
     parser = argparse.ArgumentParser()
     # dataset configuration
@@ -58,8 +54,6 @@ def parse_config():
     parser.add_argument("--aug_epoch", default = 1,  type=int, help="use augment or not")
     parser.add_argument("--aug_num", default = 2,  type=int, help="use augment or not")
     
-    
-    
     parser.add_argument("--batch_size_per_gpu", type=int, default=4, help='Batch size for each gpu.')  
     parser.add_argument("--eval_batch_size_per_gpu", type=int, default=8, help='Batch size for each gpu.')  
     parser.add_argument("--number_of_gpu", type=int, default=8, help="Number of available GPUs.")  
@@ -71,11 +65,9 @@ def parse_config():
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     parser.add_argument("--augment", type=int, help="use augment or not")
     
-    
     return parser.parse_args()
 
 def get_optimizers(model, args):
-    # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -87,12 +79,7 @@ def get_optimizers(model, args):
             "weight_decay": 0.0,
         },
     ]
-    # overall_batch_size = args.number_of_gpu * args.batch_size_per_gpu * args.gradient_accumulation_steps
-    # num_training_steps = train_num * args.epoch_num // overall_batch_size
     if args.optimizer_name == 'adam':
-        # log.info ('Use Adam Optimizer for Training.')
-        # optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-        # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=num_training_steps)
         pass
     elif args.optimizer_name == 'adafactor':
         from transformers.optimization import Adafactor, AdafactorSchedule
