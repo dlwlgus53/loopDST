@@ -63,7 +63,7 @@ def parse_config():
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
-    parser.add_argument("--augment", type=int, help="use augment or not")
+    parser.add_argument("--aug_method", type=int, help="use augment or not")
     
     return parser.parse_args()
 
@@ -226,7 +226,7 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    if args.augment: pre_trainer = Aug_training(args.aug_num, 0.2, data, 'cuda', log, args.log_interval)
+    if args.aug_method: pre_trainer = Aug_training(args.aug_method, args.aug_num, 0.2, data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu)
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
@@ -243,7 +243,7 @@ if __name__ == '__main__':
         ##################### training #################################
         student= load_model(args, data, cuda_available, load_pretrained = False)
         optimizer, scheduler = load_optimizer(student, args) # 이거 바꿨음.. 새걸로
-        if args.augment:
+        if args.aug_method:
             aug_train, aug_dev = pre_trainer.augment()
             student = pre_trainer.train(args, aug_train, aug_dev,student, args.aug_epoch, optimizer, scheduler)
             

@@ -95,7 +95,7 @@ def makedirs(path):
 def log_setting(name = None):
     if not name :
         name = "aug"
-    log = logging.getLogger('name')
+    log = logging.getLogger(name)
     log.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
     
@@ -194,6 +194,10 @@ def split_by_dial(raw_set):
         else: test_set.append(dial)
     return train_set, test_set
 
+def get_generated_dict(raw_data, tokenizer, model, change_rate, topn,  batch_size, device, log, log_interval):
+    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, change_rate, topn,log)
+    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, batch_size, device, log, log_interval)
+    return generated_dict
 
 import argparse
 if __name__ == '__main__':

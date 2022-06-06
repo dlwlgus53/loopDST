@@ -1,6 +1,5 @@
 import sys
 sys.path.append('../../../../')
-from data_augment3.augment import log_setting, get_will_change_item, generate_new_text
 import torch
 import random
 import copy
@@ -20,7 +19,13 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class Aug_training:
-    def __init__(self,aug_num, change_rate, data, device, log,log_interval):
+    def __init__(self,aug_method, aug_num, change_rate, data, device, log,log_interval, batch_size):
+        
+        if aug_method == 2:
+            from data_augment2.augment import log_setting, get_generated_dict
+        if aug_method ==3:
+            from data_augment3.augment import log_setting, get_generated_dict
+            
         log_setting("aug_log")
         DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
         self.aug_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
@@ -29,8 +34,10 @@ class Aug_training:
         self.aug_num = aug_num
         self.change_rate = change_rate
         self.log = log
+        self.get_generated_dict = get_generated_dict
         self.data = data
         self.device = device
+        self.batch_size = batch_size
         self.log_interval = log_interval
     
     def _makedirs(self, path): 
@@ -41,9 +48,11 @@ class Aug_training:
                 raise
 
     def augment(self):
+        
         raw_data = self.data.replace_label(self.data.train_raw_data, self.data.labeled_data)
-        id_list, masked_list = get_will_change_item(raw_data, self.aug_tokenizer, self.change_rate, self.aug_num, self.log)
-        generated_dict= generate_new_text(self.aug_model, self.aug_tokenizer, id_list, masked_list, self.aug_num, self.device, self.log, self.log_interval)
+        generated_dict = self.get_generated_dict(raw_data, self.aug_tokenizer, self.aug_model, self.change_rate, \
+            self.aug_num, self.batch_size, self.device, self.log,self.log_interval)
+        
         raw_data_similar = []
         for _, dial in enumerate(raw_data):
             for n in range(self.aug_num):

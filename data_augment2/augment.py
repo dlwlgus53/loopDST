@@ -121,8 +121,10 @@ def makedirs(path):
        if not os.path.isdir(path): 
            raise    
     
-def log_setting():
-    log = logging.getLogger('my_log')
+def log_setting(name = None):
+    if not name :
+        name = "aug"
+    log = logging.getLogger(name)
     log.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s')
     
@@ -162,7 +164,7 @@ def tokenize(input_text, label, tokenizer, change_rate):
     return tokenized_input.input_ids[0].tolist(), tokenized_label.input_ids[0].tolist(), inverse_input_pos, label_overlap_pos
 
 
-def get_will_change_item(raw_data, tokenizer, change_rate):
+def get_will_change_item(raw_data, tokenizer, change_rate, topn, log):
     masked_input_list = []
     masked_label_list = []
     dial_turn_id_list = []
@@ -170,10 +172,8 @@ def get_will_change_item(raw_data, tokenizer, change_rate):
     label_overlap_list = []
 
     for dial_idx, dial in enumerate(raw_data):
-        if dial_idx % 30 == 0 and dial_idx !=0:
-            log.info(f'tokenize : {dial_idx} / {len(raw_data)} done')
         for turn in dial:
-            for n in range(args.topn):
+            for n in range(topn):
                 dial_turn_key = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
                 text = turn['user']
                 label = turn['bspn']
@@ -186,15 +186,19 @@ def get_will_change_item(raw_data, tokenizer, change_rate):
 
     return dial_turn_id_list, masked_input_list, masked_label_list, inverse_input_overlap_list, label_overlap_list
 
-
-def generate_new_text(model, dial_turn_id_list, masked_input_list, masked_label_list, inverse_input_overlap_list, label_overlap_list, batch_size, DEVICE):
+def generate_new_text(model, tokenizer,dial_turn_id_list, masked_input_list, \
+    masked_label_list, inverse_input_overlap_list, label_overlap_list, batch_size, DEVICE, log,  log_interval=None):
+    
+    if not log_interval:
+        log_interval = 100
     start = 0    
     generated_dict = {}
     count_dict = defaultdict(int) # default dict
 
     while True:
-        if start % 30 == 0:
+        if start %log_interval ==0:
             log.info(f"generate new text {start}/{len(dial_turn_id_list)} done")
+        batch_id  = dial_turn_id_list[start:start+batch_size]
         batch_id  = dial_turn_id_list[start : start + batch_size]
         input_batch  = masked_input_list[start : start + batch_size]
         inverse_pos_batch = inverse_input_overlap_list[start : start + batch_size]
@@ -256,6 +260,11 @@ def split_by_dial(raw_set):
         else: test_set.append(dial)
     return train_set, test_set
 
+# input shuold not be change
+def get_generated_dict(raw_data, tokenizer, model, change_rate, topn,  batch_size, device, log, log_interval):
+    dial_turn_id_list, masked_input_list, masked_label_list, input_overlap_list, label_overlap_list = get_will_change_item(raw_data, tokenizer, change_rate, topn, log)
+    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, masked_input_list, masked_label_list, input_overlap_list, label_overlap_list, batch_size, device, log, log_interval)
+    return generated_dict
 
 import argparse
 if __name__ == '__main__':
@@ -278,10 +287,10 @@ if __name__ == '__main__':
 
     with open(raw_datapath) as f:
         raw_data = json.load(f)
-        
     raw_data = filtering_data(raw_data, init_labeled_data)
-    dial_turn_id_list, masked_input_list, masked_label_list, input_overlap_list, label_overlap_list = get_will_change_item(raw_data, tokenizer, args.change_rate)
-    generated_dict= generate_new_text(model, dial_turn_id_list, masked_input_list, masked_label_list, input_overlap_list, label_overlap_list, args.batch_size, DEVICE)
+    dial_turn_id_list, masked_input_list, masked_label_list, input_overlap_list, label_overlap_list = get_will_change_item(raw_data, tokenizer, args.change_rate, args.topn, log)
+    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, masked_input_list, masked_label_list, input_overlap_list, label_overlap_list, args.batch_size, DEVICE, log)
+    
     raw_data_similar = []
     
     for dial_idx, dial in enumerate(raw_data):
