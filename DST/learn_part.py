@@ -61,6 +61,8 @@ def parse_config():
     parser.add_argument("--ckpt_save_path", type=str, help="directory to save the model parameters.")
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
+    parser.add_argument("--aug_rate", type=float, default=0.2, help="confidence percent")
+    
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     parser.add_argument("--aug_method", type=int, help="use augment or not")
@@ -226,7 +228,8 @@ if __name__ == '__main__':
           debugging = args.debugging)
     
     
-    if args.aug_method: pre_trainer = Aug_training(args.aug_method, args.aug_num, 0.2, data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu)
+    if args.aug_method: pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
+        data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu)
     
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
