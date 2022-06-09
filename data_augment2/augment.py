@@ -230,7 +230,8 @@ def generate_new_text(model, tokenizer,dial_turn_id_list, masked_input_list, \
             decode_label = tokenizer.decode(decode_label_[1 : -2])
 
             count_dict[idx] +=1
-            generated_dict[idx] = {'text' :decode_input, 'mask_text' : mask_text, 'label' : decode_label, 'mask_label' : decode_mask_label}
+            generated_dict[idx] = {'text' :decode_input, 'mask_text' : mask_text, \
+                'label' : '<sos_b> '+ decode_label + ' <eos_b>', 'mask_label' : decode_mask_label}
             
         start += batch_size
         
@@ -303,7 +304,7 @@ if __name__ == '__main__':
                 similar_turn['dial_id'] += f'_v{str(n)}'
                 similar_turn['user'] = generated_dict[idx]['text']
                 similar_turn['mask'] = generated_dict[idx]['mask_text']
-                similar_turn['bspn'] = generated_dict[idx]['label']
+                similar_turn['bspn'] =  generated_dict[idx]['label']
                 similar_turn['mask_bspn'] = generated_dict[idx]['mask_label']
                 similar_dial.append(similar_turn)
             raw_data_similar.append(similar_dial)
