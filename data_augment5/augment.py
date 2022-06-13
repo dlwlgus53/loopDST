@@ -1,3 +1,5 @@
+# 모델을 불러와서 augment합니다.
+
 # generate with conditioned t5 model
 import random
 import torch
