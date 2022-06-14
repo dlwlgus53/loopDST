@@ -1,4 +1,5 @@
 # 모델을 불러와서 augment합니다.
+# 외부랑 연결되는 코드
 
 # generate with conditioned t5 model
 import random
