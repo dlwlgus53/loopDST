@@ -11,8 +11,8 @@ import torch.nn.functional as F
 from transformers import T5Tokenizer, T5ForConditionalGeneration,Adafactor
 import logging
 import logging.handlers
-from data_augment5.model_train.trainer import  train, evaluate
-from data_augment5.model_train.generate_dataclass import Generate_dataclass
+from trainer import  train, evaluate
+from generate_dataclass import Generate_dataclass
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)

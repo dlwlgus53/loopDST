@@ -8,7 +8,7 @@ from torch.nn.utils import rnn
 import random
 import logging
 import logging.handlers
-import data_augment5.model_train.ontology as ontology
+import ontology
 import copy
 import time
 from transformers import T5Config
@@ -233,8 +233,7 @@ class Generate_dataclass:
                 
             one_batch = [one_input_batch_list, one_output_batch_list]
             batch_list.append(one_batch)
-        out_str = f'Overall Number of datapoints of {mode} is \
-            {str(data_num)}  and batches is {str(len(batch_list))}'
+        out_str = f'Overall Number of datapoints of {mode} is {str(data_num)}  and batches is {str(len(batch_list))}'
             
         self.log.info (out_str)
         

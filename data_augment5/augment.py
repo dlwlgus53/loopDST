@@ -7,8 +7,12 @@ import argparse
 import copy
 import logging
 import logging.handlers
+import random
 import copy
+import torch.nn as nn
 from collections import defaultdict
+from transformers import T5Tokenizer, T5ForConditionalGeneration,Adafactor, T5Config
+
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
@@ -34,6 +38,7 @@ def parse_config():
     parser.add_argument('--batch_size', type=int ,default = 10, help='batch_size for t5')
     parser.add_argument('--model_path', type=str ,default = 't5-base', help='batch_size for t5')
     parser.add_argument('--save_path', type=str ,default = './save', help='batch_size for t5')
+    
     return parser.parse_args()
 
 
@@ -191,6 +196,18 @@ def get_generated_dict(raw_data, tokenizer, model, change_rate, topn,  batch_siz
     return generated_dict
 
 
+#  self.model = T5ForConditionalGeneration.from_pretrained(model_path, config=t5_config, resume_download=True)
+
+def load_model(model_path, device, multi_gpu_training):
+    t5_config = T5Config.from_pretrained(model_path)
+    model = T5ForConditionalGeneration.from_pretrained(model_path, config=t5_config, resume_download=True)
+    if multi_gpu_training:
+        model = nn.DataParallel(model) # multi-gpu training
+    else:
+        pass
+    model = model.to(device)
+    return model
+
 
 import argparse
 if __name__ == '__main__':
@@ -199,48 +216,49 @@ if __name__ == '__main__':
 
     log.info('seed setting')
     seed_setting(args.seed)
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
+   
+    if torch.cuda.device_count() > 1:
+        multi_gpu_training = True
+    else:
+        multi_gpu_training = False
+            
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
+    log.info(f"load model and tokenizer from  {args.model_path}")
+    model = load_model(args.model_path, device, multi_gpu_training)
+    tokenizer = T5Tokenizer.from_pretrained(args.model_path)
     
-    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
-    config = RobertaConfig()
-    model = RobertaForMaskedLM.from_pretrained('roberta-base').to(DEVICE)
-
-    raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-train.json' # 전체 training data
-    raw_init_datapath = args.init_label_path + 'labeled_init.json' # 10% 사용할 때, 어떤 10%를 사용할 지 정보를 가지고 있는 파일
+    raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-tenpercent.json' # 전체 training data
     
-    with open(raw_init_datapath) as f:
-        init_labeled_data = json.load(f)
-
-    with open(raw_datapath) as f:
-        raw_data = json.load(f)
+    # with open(raw_datapath) as f:
+    #     raw_data = json.load(f)
         
-    raw_data = filtering_data(raw_data, init_labeled_data)
-    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, args.change_rate, args.topn,log)
-    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE, log)
-    raw_data_similar = []
+    # raw_data = filtering_data(raw_data, init_labeled_data)
+    # dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, args.change_rate, args.topn,log)
+    # generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE, log)
+    # raw_data_similar = []
     
-    for dial_idx, dial in enumerate(raw_data):
-        if dial_idx%30 == 0 and dial_idx !=0:log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
-        for n in range(args.topn):
-            similar_dial = []
-            for turn in dial:
-                idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
-                similar_turn = copy.deepcopy(turn)
-                similar_turn['dial_id'] += f'_v{str(n)}'
-                similar_turn['user'] = generated_dict[idx]['text']
-                similar_turn['mask'] = generated_dict[idx]['mask_text']
-                similar_dial.append(similar_turn)
-            raw_data_similar.append(similar_dial)
+    # for dial_idx, dial in enumerate(raw_data):
+    #     if dial_idx%30 == 0 and dial_idx !=0:log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
+    #     for n in range(args.topn):
+    #         similar_dial = []
+    #         for turn in dial:
+    #             idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
+    #             similar_turn = copy.deepcopy(turn)
+    #             similar_turn['dial_id'] += f'_v{str(n)}'
+    #             similar_turn['user'] = generated_dict[idx]['text']
+    #             similar_turn['mask'] = generated_dict[idx]['mask_text']
+    #             similar_dial.append(similar_turn)
+    #         raw_data_similar.append(similar_dial)
 
-    makedirs(f"./{args.save_path}")
+    # makedirs(f"./{args.save_path}")
 
 
-    train_set, test_set = split_by_dial(raw_data_similar)
-    # 90%
-    with open(f'./{args.save_path}/multiwoz-fine-processed-train.json', 'w') as outfile:
-        json.dump(train_set, outfile, indent=4)
+    # train_set, test_set = split_by_dial(raw_data_similar)
+    # # 90%
+    # with open(f'./{args.save_path}/multiwoz-fine-processed-train.json', 'w') as outfile:
+    #     json.dump(train_set, outfile, indent=4)
         
-    # 10%
-    with open(f'./{args.save_path}/multiwoz-fine-processed-dev.json', 'w') as outfile:
-        json.dump(test_set, outfile, indent=4)
+    # # 10%
+    # with open(f'./{args.save_path}/multiwoz-fine-processed-dev.json', 'w') as outfile:
+    #     json.dump(test_set, outfile, indent=4)
         
