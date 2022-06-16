@@ -1,3 +1,4 @@
+from calendar import c
 import pdb
 import sys
 import torch
@@ -8,11 +9,19 @@ from torch.nn.utils import rnn
 import random
 import logging
 import logging.handlers
-import ontology
 import copy
 import time
 from transformers import T5Config
 
+slot_info = {
+    "taxi": ["leave", "destination", "departure", "arrive"],
+    "police": [],
+    "hospital": ["department"],
+    "hotel": ["type", "parking", "pricerange", "internet", "stay", "day", "people", "area", "stars", "name"],
+    "attraction": ["area", "type", "name"],
+    "train": ["destination", "day", "arrive", "departure", "people", "leave"],
+    "restaurant": ["food", "pricerange", "area", "name", "time", "day", "people"]
+}
 
 class Generate_dataclass:
     def __init__(self, tokenizer, data_path_prefix=None,  raw_data = None, log_path=None, log= None, debugging = False):
@@ -82,7 +91,7 @@ class Generate_dataclass:
         return  this_bspn
 
     def bspn_to_dict(self, bspn):
-        slot_info = ontology.informable_slots
+        
         bspn =bspn.replace("<sos_b> ",'').replace("<eos_b>","").split(" ")
         bspn_dict = {}
         
@@ -225,10 +234,13 @@ class Generate_dataclass:
         else:
             raise Exception('Wrong Mode!!!')
         
-        all_input_data_list, all_output_data_list = [], []
+        all_input_data_list, all_output_data_list, all_index_list = [], [], []
         for item in all_data_list:  
+            dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
             all_input_data_list.append(item['input'])
             all_output_data_list.append(item['output'])
+            all_index_list.append(dial_turn_key)
+            
         data_num = len(all_input_data_list)
         batch_num = int(data_num/batch_size) + 1
 
@@ -241,14 +253,18 @@ class Generate_dataclass:
             for idx in range(start_idx, end_idx):
                 one_input_batch_list.append(all_input_data_list[idx])
                 one_output_batch_list.append(all_output_data_list[idx])
+                one_index_list.append(all_index_list[idx])
+                
                 
             one_batch = [one_input_batch_list, one_output_batch_list]
+            one_idx = one_index_list
             batch_list.append(one_batch)
+            idx_list.append(one_idx)
         out_str = f'Overall Number of datapoints of {mode} is {str(data_num)}  and batches is {str(len(batch_list))}'
             
         self.log.info (out_str)
         
-        return batch_list
+        return batch_list, idx_list
             
     def build_iterator(self, batch_size, mode):
         batch_list, idx_list= self.get_filtered_batches(batch_size, mode)
@@ -256,7 +272,8 @@ class Generate_dataclass:
             for batch in batch_list:
                 yield batch
         elif mode == 'gen':
-            pass
+            for batch, idx in zip(batch_list, idx_list):
+                yield batch, idx
             
 
 

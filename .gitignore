@@ -8,6 +8,9 @@ pre_training/ckpt/
 *.json
 *.sh
 *.txt
+*.bin
+*.model
+*/ckpt/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

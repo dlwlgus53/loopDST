@@ -128,28 +128,27 @@ def tokenize(input_text,label, tokenizer, change_rate):
 #     return dial_turn_id_list, tokenized_masked_list
 
 
-def generate_new_text(model, data, device,log, log_interval=None):
+def generate_new_text(model, data, device,log, number_of_gpu, batch_size_per_gpu, log_interval=None):
     model.eval()
     generate_dict = {}
-    gen_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode = "gen")
+    gen_iterator = data.build_iterator(batch_size=number_of_gpu * batch_size_per_gpu, mode = "gen")
     with torch.no_grad():
-        for idx, gen_batch in enumerate(gen_iterator):
+        for idx, (gen_batch, key)in enumerate(gen_iterator):
             if idx == 0:
-                dev_num = len(data.dev_data_list)
-                dev_batch_num_per_epoch = int(dev_num / (args.number_of_gpu * args.batch_size_per_gpu))+1
+                dev_num = len(data.gen_data_list)
+                dev_batch_num_per_epoch = int(dev_num / (number_of_gpu * batch_size_per_gpu))+1
             idx += 1
             if idx%50 == 0: log.info(f'{idx*100/dev_batch_num_per_epoch:.2f} %')
-            one_dev_input_batch, one_dev_output_batch = dev_batch
+            one_dev_input_batch, one_dev_output_batch = gen_batch
             if len(one_dev_input_batch) == 0 or len(one_dev_output_batch) == 0: break
-            source_input, _, target_input, _ = \
+            source_input, _, _, _ = \
             data.parse_batch_tensor(gen_batch)
             input_ids = source_input.to(device)
-            labels = target_input.to(device)
-            outputs = model.generate(input_ids = input_ids, labels = labels)
-            dev_loss += outputs.loss.mean().item()
-            generated_dict[1] =2 
-            
-    return generated_dict
+            outputs = model.module.generate(input_ids = input_ids)
+            for k, output in zip(key, outputs):
+                text = data.tokenizer.decode(output,skip_special_tokens = True)
+                generate_dict[k] = text
+    return generate_dict
 
 def filtering_data(raw_data, filter_data):
     data = []
@@ -173,11 +172,11 @@ def split_by_dial(raw_set):
 
 
 ## This is the most important!
-def get_generated_dict(raw_data, tokenizer, model, topn,  batch_size, device, log, log_interval):
+def get_generated_dict(raw_data, tokenizer, model, topn,  number_of_gpu, batch_size_per_gpu, device, log, log_interval = None):
     data = Generate_dataclass(tokenizer, raw_data = raw_data,  log = log, debugging = False)
-    generated_dict= generate_new_text(model, tokenizer,data, device, log, log_interval)
+    generated_dict= generate_new_text(model, data, device, log, number_of_gpu, batch_size_per_gpu, log_interval)
     return generated_dict
-
+    
 
 #  self.model = T5ForConditionalGeneration.from_pretrained(model_path, config=t5_config, resume_download=True)
 
@@ -214,8 +213,7 @@ if __name__ == '__main__':
     with open(raw_datapath) as f:
         raw_data = json.load(f)
         
-    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, args.topn, log)
-    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE, log)
+    generated_dictionary =get_generated_dict(raw_data, tokenizer, model, 3,  2, 2, device, log, log_interval = None)
     # raw_data_similar = []
     
     # for dial_idx, dial in enumerate(raw_data):
