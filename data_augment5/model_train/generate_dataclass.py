@@ -256,6 +256,7 @@ class Generate_dataclass:
             for batch in batch_list:
                 yield batch
         elif mode == 'gen':
+            pass
             
 
 
