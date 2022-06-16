@@ -1,7 +1,4 @@
-# https://jimmy-ai.tistory.com/196
-# augment data 저장
-# augmen only!
-import random
+
 import torch
 import os
 import json
