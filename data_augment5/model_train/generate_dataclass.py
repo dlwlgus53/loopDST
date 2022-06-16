@@ -15,22 +15,33 @@ from transformers import T5Config
 
 
 class Generate_dataclass:
-    def __init__(self, model_name, tokenizer, data_path_prefix, ckpt_save_path, log_path, init_label_path, shuffle_mode='shuffle_session_level', 
-        debugging = False):
+    def __init__(self, tokenizer, data_path_prefix=None,  raw_data = None, log_path=None, log= None, debugging = False):
         
         # add special words to tokenizer
+        if not log_path and not log:
+            raise Exception("There is no logger")
+        if not data_path_prefix and not raw_data:
+            raise Exception("Ther is no data configuration")
         
-        self.log = self.log_setting(log_path)
+        
+        if log:
+            self.log = log
+        if log_path:
+            self.log = self.log_setting(log_path)
+            
         self.tokenizer = tokenizer
         self.debugging = debugging
-        train_json_path = data_path_prefix + '/multiwoz-fine-processed-tenpercent.json' 
         
-        if self.debugging : 
-            small_path = data_path_prefix + '/multiwoz-fine-processed-small_dev.json' 
-            train_json_path = dev_json_path = test_json_path = small_path
-
-        with open(train_json_path) as f:
-            self.train_raw_data = json.load(f)
+        if data_path_prefix:
+            train_json_path = data_path_prefix + '/multiwoz-fine-processed-tenpercent.json' 
+            if self.debugging : 
+                small_path = data_path_prefix + '/multiwoz-fine-processed-small_dev.json' 
+                train_json_path = small_path
+            with open(train_json_path) as f:
+                self.train_raw_data = json.load(f)
+        
+        if raw_data:
+            self.train_raw_data = raw_data
 
 
     def log_setting(self, log_path):
@@ -165,7 +176,7 @@ class Generate_dataclass:
                     'turn_num': turn_id,
                     # 'input': prefix + generate_input,
                     'input':generate_input,
-                    'output' : curr_turn['user']
+                    'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>","")
                     })
                 
                 previous_context = previous_context + curr_turn['user'] + curr_turn['resp']
@@ -207,10 +218,10 @@ class Generate_dataclass:
             # raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
             self.dev_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.dev_data_list
-        # elif mode == 'test':
-        #     raw_data = self.replace_label(self.train_aug_raw_data, self.labeled_data)
-        #     self.train_aug_data_list = self.make_data_list(raw_data) # make dataset with labeled data
-        #     all_data_list = self.train_aug_data_list
+        elif mode == 'gen':
+            raw_data= self.train_raw_data
+            self.gen_data_list = self.make_data_list(raw_data) # make dataset with labeled data
+            all_data_list =  self.gen_data_list
         else:
             raise Exception('Wrong Mode!!!')
         
@@ -240,9 +251,12 @@ class Generate_dataclass:
         return batch_list
             
     def build_iterator(self, batch_size, mode):
-        batch_list= self.get_filtered_batches(batch_size, mode)
-        for batch in batch_list:
-            yield batch
+        batch_list, idx_list= self.get_filtered_batches(batch_size, mode)
+        if mode == 'train' or mode == 'dev':
+            for batch in batch_list:
+                yield batch
+        elif mode == 'gen':
+            
 
 
 

@@ -12,6 +12,7 @@ import copy
 import torch.nn as nn
 from collections import defaultdict
 from transformers import T5Tokenizer, T5ForConditionalGeneration,Adafactor, T5Config
+from model_train.generate_dataclass import Generate_dataclass
 
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
@@ -122,50 +123,32 @@ def tokenize(input_text,label, tokenizer, change_rate):
         tokenized_input.input_ids[0,mask_position] = mask_idx 
     return tokenized_input.input_ids[0].tolist()
 
-def get_will_change_item(raw_data, tokenizer, change_rate, topn, log):
-    tokenized_masked_list = []
-    dial_turn_id_list = []
-    for dial_idx, dial in enumerate(raw_data):
-        for turn in dial:
-            for n in range(topn):
-                dial_turn_key = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
-                text = turn['user']
-                label = turn['bspn']
-                tokenize_mask_text = tokenize(text, label,tokenizer, change_rate)
-                dial_turn_id_list.append(dial_turn_key)
-                tokenized_masked_list.append(tokenize_mask_text)
-    return dial_turn_id_list, tokenized_masked_list
+# def get_will_change_item(raw_data, topn, log):
+#     # 여기서 input을 만들어
+#     return dial_turn_id_list, tokenized_masked_list
 
 
-def generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, batch_size, DEVICE,log, log_interval=None):
-    if not log_interval:
-        log_interval = 100
-    start = 0    
-    generated_dict = {}
-    count_dict = defaultdict(int) # default dict
-    while True:
-        if start %log_interval ==0:
-            log.info(f"generate new text {start}/{len(dial_turn_id_list)} done")
-        batch_id  = dial_turn_id_list[start:start+batch_size]
-        batch  = tokenized_masked_list[start:start+batch_size]
-        batch = tokenizer.pad({'input_ids' :batch})
-        batch = torch.tensor(batch.input_ids).to(DEVICE)
-        generated = model(batch)
-        generated = torch.argmax(generated.logits, dim = -1)
-
-        
-        for idx, masked, output in zip(batch_id, batch, generated):
-            end_position = (masked==2).nonzero().item()
-            decode_result = tokenizer.decode(output[1:end_position])
-            mask_text = tokenizer.decode(masked[1:end_position])
-            decode_result = "<sos_u> "+ decode_result.replace("</s>","") + " <eos_u>"
-            count_dict[idx] +=1
-            generated_dict[idx] = {'text' :decode_result, 'mask_text' : mask_text}
+def generate_new_text(model, data, device,log, log_interval=None):
+    model.eval()
+    generate_dict = {}
+    gen_iterator = data.build_iterator(batch_size=args.number_of_gpu * args.batch_size_per_gpu, mode = "gen")
+    with torch.no_grad():
+        for idx, gen_batch in enumerate(gen_iterator):
+            if idx == 0:
+                dev_num = len(data.dev_data_list)
+                dev_batch_num_per_epoch = int(dev_num / (args.number_of_gpu * args.batch_size_per_gpu))+1
+            idx += 1
+            if idx%50 == 0: log.info(f'{idx*100/dev_batch_num_per_epoch:.2f} %')
+            one_dev_input_batch, one_dev_output_batch = dev_batch
+            if len(one_dev_input_batch) == 0 or len(one_dev_output_batch) == 0: break
+            source_input, _, target_input, _ = \
+            data.parse_batch_tensor(gen_batch)
+            input_ids = source_input.to(device)
+            labels = target_input.to(device)
+            outputs = model.generate(input_ids = input_ids, labels = labels)
+            dev_loss += outputs.loss.mean().item()
+            generated_dict[1] =2 
             
-        start += batch_size
-        
-        if start>= len(dial_turn_id_list):
-            break
     return generated_dict
 
 def filtering_data(raw_data, filter_data):
@@ -190,9 +173,9 @@ def split_by_dial(raw_set):
 
 
 ## This is the most important!
-def get_generated_dict(raw_data, tokenizer, model, change_rate, topn,  batch_size, device, log, log_interval):
-    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, change_rate, topn,log)
-    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, batch_size, device, log, log_interval)
+def get_generated_dict(raw_data, tokenizer, model, topn,  batch_size, device, log, log_interval):
+    data = Generate_dataclass(tokenizer, raw_data = raw_data,  log = log, debugging = False)
+    generated_dict= generate_new_text(model, tokenizer,data, device, log, log_interval)
     return generated_dict
 
 
@@ -226,15 +209,13 @@ if __name__ == '__main__':
     log.info(f"load model and tokenizer from  {args.model_path}")
     model = load_model(args.model_path, device, multi_gpu_training)
     tokenizer = T5Tokenizer.from_pretrained(args.model_path)
-    
     raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-tenpercent.json' # 전체 training data
-    
-    # with open(raw_datapath) as f:
-    #     raw_data = json.load(f)
+
+    with open(raw_datapath) as f:
+        raw_data = json.load(f)
         
-    # raw_data = filtering_data(raw_data, init_labeled_data)
-    # dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, args.change_rate, args.topn,log)
-    # generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE, log)
+    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, args.topn, log)
+    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE, log)
     # raw_data_similar = []
     
     # for dial_idx, dial in enumerate(raw_data):

@@ -159,7 +159,7 @@ if __name__ == '__main__':
     
     log.info('Initialize dataclass')
     
-    data = Generate_dataclass(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, \
+    data = Generate_dataclass(tokenizer, args.data_path_prefix, \
         log_path = f'{args.ckpt_save_path}log.txt', debugging = args.debugging)
     
     optimizer = Adafactor(model.parameters(),lr=1e-3,
