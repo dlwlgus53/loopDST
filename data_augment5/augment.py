@@ -145,7 +145,7 @@ def generate_new_text(model, data, device,log, number_of_gpu, batch_size_per_gpu
             data.parse_batch_tensor(gen_batch)
             input_ids = source_input.to(device)
             outputs = model.module.generate(input_ids = input_ids)
-            for k, output in zip(key, outputs):
+            for k, output in zip(key, outputs): # format 맞추기 해야한다
                 text = data.tokenizer.decode(output,skip_special_tokens = True)
                 generate_dict[k] = text
     return generate_dict

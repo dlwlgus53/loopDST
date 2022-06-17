@@ -148,28 +148,12 @@ class Generate_dataclass:
                                 this_bspn_dict = self.bspn_split_this(prev_turn_bspn_dict, turn_bspn_dict)
                                 one_turn_dict['prev_bspn'] = one_sess_list[-1]['bspn']
                                 one_turn_dict['this_bspn'] = self.dict_to_bspn(this_bspn_dict)
-
-                    # elif key in  ['user', 'resp', 'bspn']:
-                    #     value_text = turn[key]
-                    #     value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
-                    #     one_turn_dict[key] = value_id
-                        
-                    #     if key == 'bspn':
-                    #         value_text = turn[key] # change to only this belief
-                    #         value_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(value_text))
-                    #         one_turn_dict['this_bspn'] = value_id
-                            
                 one_sess_list.append(one_turn_dict)
             all_session_list.append(one_sess_list)
         assert len(all_session_list) == len(raw_data_list)
         return all_session_list
     
     def flatten_data(self, data):
-        # prefix = self.tokenizer("generate the user utterance : ")['input_ids']
-        # context_prefix = self.tokenizer("<context>")['input_ids']
-        # bspn_prefix =  self.tokenizer("<bspn>")['input_ids']
-        # this_turn_prefix =self.tokenizer("<this_bspn>")['input_ids']
-         
         data_list = []
         for session in data: # session is dial
             one_dial_id = session[0]['dial_id']
@@ -178,16 +162,14 @@ class Generate_dataclass:
             for turn_id in range(turn_num):
                 curr_turn = session[turn_id]
                 assert curr_turn['turn_num'] == turn_id # the turns should be arranged in order
-                # TODO : change this part to idx
-                # generate_input = context_prefix + previous_context[-900:] + bspn_prefix + curr_turn['bspn'] + this_turn_prefix + curr_turn['this_bspn']
                 generate_input ="generate the user utterance : " + previous_context[-900:] + "<prev_bspn>" + curr_turn['prev_bspn'] + "<this_bspn>" + curr_turn['this_bspn']
-                data_list.append({'dial_id': one_dial_id,
-                    'turn_num': turn_id,
-                    # 'input': prefix + generate_input,
-                    'input':generate_input,
-                    'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>","")
-                    })
-                
+                # Belief 있으면 append 없으면 append안함
+                if len(curr_turn['this_bspn'].replace("<sos_b> ", "").replace("<eos_b>",""))!=0:
+                    data_list.append({'dial_id': one_dial_id,
+                        'turn_num': turn_id,
+                        'input':generate_input,
+                        'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>","")
+                        })
                 previous_context = previous_context + curr_turn['user'] + curr_turn['resp']
         return data_list
 
