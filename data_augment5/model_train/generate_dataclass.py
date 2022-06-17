@@ -188,6 +188,35 @@ class Generate_dataclass:
                     new_data.append(dial)
         return new_data
     
+    def make_value_dict(self, raw):
+        value_dict = {
+            'hotel' : {},
+            'taxi' : {},
+            'police' : {},
+            'attraction' : {},
+            'train' : {},
+            'restaurant': {},
+            'hospital': {}
+            
+        }
+ 
+        for dial in raw:
+            for turn in dial:
+                bspn_dict = self.bspn_to_dict(turn['bspn'])
+                for domain in bspn_dict.keys():
+                    sv = bspn_dict[domain]
+                    for slot in sv:
+                        if slot in value_dict[domain]:
+                            values = value_dict[domain][slot]
+                            v = sv[slot]
+                            values.append(v)
+                            values = list(set(values))
+                            value_dict[domain][slot] = values
+                        else:
+                            v = sv[slot]
+                            value_dict[domain][slot] = [v]
+        return value_dict
+    
     def replace_label(self, raw, label):
         new_raw = copy.deepcopy(raw)
         for dial in new_raw:
@@ -211,6 +240,7 @@ class Generate_dataclass:
             all_data_list = self.dev_data_list
         elif mode == 'gen':
             raw_data= self.train_raw_data
+            value_dict = self.make_value_dict(raw_data)
             self.gen_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list =  self.gen_data_list
         else:
@@ -276,10 +306,6 @@ class Generate_dataclass:
 
     def parse_batch_tensor(self, batch):
         batch_input_id_list, batch_output_id_list = batch
-        # batch_src_tensor, batch_src_mask = self.pad_batch(batch_input_id_list)
-        # batch_input, batch_labels = self.process_output(batch_output_id_list)
-        # batch_labels[batch_labels[:, :] == self.pad_token_id] = -100
-        
         batch_input = self.tokenizer(batch_input_id_list, padding = True, truncation = True)
         batch_output = self.tokenizer(batch_output_id_list, padding = True, truncation = True)
         

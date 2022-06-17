@@ -145,7 +145,7 @@ def generate_new_text(model, data, device,log, number_of_gpu, batch_size_per_gpu
             data.parse_batch_tensor(gen_batch)
             input_ids = source_input.to(device)
             outputs = model.module.generate(input_ids = input_ids)
-            for k, output in zip(key, outputs): # format 맞추기 해야한다
+            for k, output in zip(key, outputs): # 여러개 만드는 것 -> 데이터 셋에 정의되어 있어야 한다.
                 text = data.tokenizer.decode(output,skip_special_tokens = True)
                 generate_dict[k] = text
     return generate_dict
@@ -215,7 +215,6 @@ if __name__ == '__main__':
         
     generated_dictionary =get_generated_dict(raw_data, tokenizer, model, 3,  2, 2, device, log, log_interval = None)
     # raw_data_similar = []
-    
     # for dial_idx, dial in enumerate(raw_data):
     #     if dial_idx%30 == 0 and dial_idx !=0:log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
     #     for n in range(args.topn):
@@ -225,7 +224,6 @@ if __name__ == '__main__':
     #             similar_turn = copy.deepcopy(turn)
     #             similar_turn['dial_id'] += f'_v{str(n)}'
     #             similar_turn['user'] = generated_dict[idx]['text']
-    #             similar_turn['mask'] = generated_dict[idx]['mask_text']
     #             similar_dial.append(similar_turn)
     #         raw_data_similar.append(similar_dial)
 
