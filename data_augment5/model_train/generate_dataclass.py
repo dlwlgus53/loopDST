@@ -172,11 +172,41 @@ class Generate_dataclass:
                         })
                 previous_context = previous_context + curr_turn['user'] + curr_turn['resp']
         return data_list
+    
+    
+    def flatten_aug_data(self, data, aug_num, value_dict):
+        data_list = []
+        for session in data: # session is dial
+            one_dial_id = session[0]['dial_id']
+            turn_num = len(session)
+            previous_context = '' # previous context contains all previous user input and system response
+            for turn_id in range(turn_num):
+                curr_turn = session[turn_id]
+                assert curr_turn['turn_num'] == turn_id # the turns should be arranged in order
+                for n in aug_num:
+                    # TODO another bspn
+                    generate_input ="generate the user utterance : " + previous_context[-900:] + "<prev_bspn>" + curr_turn['prev_bspn'] + "<this_bspn>" + curr_turn['this_bspn']
+                    # Belief 있으면 append 없으면 append안함
+                    if len(curr_turn['this_bspn'].replace("<sos_b> ", "").replace("<eos_b>",""))!=0:
+                        data_list.append({'dial_id': one_dial_id,
+                            'turn_num': turn_id,
+                            'input':generate_input,
+                            'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>","")
+                            })
+                previous_context = previous_context + curr_turn['user'] + curr_turn['resp']
+        return data_list
 
 
-    def make_data_list(self, raw_data):
+
+    # 이 함수 있어야해 ?
+    def make_data_list(self, raw_data, aug_num = None):
         data_id_list = self.tokenize_raw_data(raw_data) # give labled data list too
-        data_list = self.flatten_data(data_id_list)
+        
+        if aug_num:
+            value_dict = self.make_value_dict(raw_data)
+            data_list = self.flatten_aug_data(data_id_list, aug_num, value_dict)
+        else:
+            data_list = self.flatten_data(data_id_list, aug_num)
         return data_list
 
     def filter_data(self, raw, filter, use_label):
@@ -226,7 +256,7 @@ class Generate_dataclass:
                     turn['bspn'] = label[dial_turn_key]
         return new_raw
         
-    def get_filtered_batches(self, batch_size, mode): 
+    def get_filtered_batches(self, batch_size, mode, aug_num = None): 
         batch_list = []
         idx_list = []
         if mode == 'train':
@@ -240,8 +270,8 @@ class Generate_dataclass:
             all_data_list = self.dev_data_list
         elif mode == 'gen':
             raw_data= self.train_raw_data
-            value_dict = self.make_value_dict(raw_data)
-            self.gen_data_list = self.make_data_list(raw_data) # make dataset with labeled data
+            
+            self.gen_data_list = self.make_data_list(raw_data, aug_num) # make dataset with labeled data
             all_data_list =  self.gen_data_list
         else:
             raise Exception('Wrong Mode!!!')
@@ -278,8 +308,8 @@ class Generate_dataclass:
         
         return batch_list, idx_list
             
-    def build_iterator(self, batch_size, mode):
-        batch_list, idx_list= self.get_filtered_batches(batch_size, mode)
+    def build_iterator(self, batch_size, mode, aug_num = None):
+        batch_list, idx_list= self.get_filtered_batches(batch_size, mode, aug_num)
         if mode == 'train' or mode == 'dev':
             for batch in batch_list:
                 yield batch

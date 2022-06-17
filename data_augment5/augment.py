@@ -131,7 +131,7 @@ def tokenize(input_text,label, tokenizer, change_rate):
 def generate_new_text(model, data, device,log, number_of_gpu, batch_size_per_gpu, log_interval=None):
     model.eval()
     generate_dict = {}
-    gen_iterator = data.build_iterator(batch_size=number_of_gpu * batch_size_per_gpu, mode = "gen")
+    gen_iterator = data.build_iterator(batch_size=number_of_gpu * batch_size_per_gpu, mode = "gen", aug_num = args.topn)
     with torch.no_grad():
         for idx, (gen_batch, key)in enumerate(gen_iterator):
             if idx == 0:
