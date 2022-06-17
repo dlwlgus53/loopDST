@@ -29,7 +29,7 @@ def train(args,model,optimizer,data,log, cuda_available, device):
             log.info(f'{idx*100/train_batch_num_per_epoch:.2f}% done. loss > {train_loss/idx:.4f}')
             log.info(f'INPUT : {train_batch[0][0]}')
             log.info(f'LABEL : {train_batch[1][0]}')
-            log.info(f'OUTPUT : ' +  ''.join(data.tokenizer.convert_ids_to_tokens(logit_result)).replace("<pad>","").replace("_"," "))
+            log.info(f'OUTPUT : {data.tokenizer.decode(logit_result, skip_special_tokens = True)}')
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
         if (idx+1) % args.gradient_accumulation_steps == 0 or (idx + 1) == train_batch_num_per_epoch:
