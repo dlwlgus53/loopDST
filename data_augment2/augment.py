@@ -14,6 +14,7 @@ import logging.handlers
 import copy
 from collections import defaultdict
 from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
+from special_token_list import special_tokens
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
@@ -228,6 +229,9 @@ def generate_new_text(model, tokenizer,dial_turn_id_list, masked_input_list, \
             
             decode_mask_label = tokenizer.decode(masked_label[1 : -2])
             decode_label = tokenizer.decode(decode_label_[1 : -2])
+            
+            decode_mask_label = change_special_token(decode_mask_label)
+            decode_label = change_special_token(decode_label)
 
             count_dict[idx] +=1
             generated_dict[idx] = {'text' :decode_input, 'mask_text' : mask_text, \
@@ -238,6 +242,15 @@ def generate_new_text(model, tokenizer,dial_turn_id_list, masked_input_list, \
         if start>= len(dial_turn_id_list):
             break
     return generated_dict
+
+def change_special_token(decoded_text) :
+    new_text_ = copy.deepcopy(decoded_text).split()
+    temp = decoded_text.split()
+    for i in range(len(new_text_)) :
+        if temp[i] in special_tokens :
+            new_text_[i] = '['+temp[i]+']'
+    new_text = ' '.join(s for s in new_text_ )
+    return new_text
 
 
 def filtering_data(raw_data, filter_data):
