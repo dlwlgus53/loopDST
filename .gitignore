@@ -3,6 +3,7 @@ data/multiwoz/utils/
 pre_training/out
 DST/ckpt
 DST/__pycache__/
+data_augment5/aug_model/
 pre_training/ckpt/
 *.out
 *.json

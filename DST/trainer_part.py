@@ -67,7 +67,7 @@ def tagging(args,model,data,log, cuda_available, device):
     data.update_labeled_data(labeled_data)
     
     log.info(f"prior labeld data: {prev_labeled_data_len} unlabeld data: {tagging_data_num - prev_labeled_data_len} saving :{labeled_cnt}")
-    log.info(f"updated tagged data: {len(data.labeled_data)}")
+    log.info(f"updated labeled data: {len(data.labeled_data)}")
     
 def train(args, model,optimizer, scheduler, data,log, cuda_available, device, mode):
     model.train()

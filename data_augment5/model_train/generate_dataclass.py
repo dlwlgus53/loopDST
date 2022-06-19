@@ -108,11 +108,17 @@ class Generate_dataclass:
                     slot = word
                     bspn_dict[domain][slot] = ''
                 else:
+                    if domain == '' or slot == '': # wrong slot name
+                        print(f"error : domain {domain} slot {word}")
+                        print(word)
+                        continue
                     if len(bspn_dict[domain][slot]) == 0:
                         bspn_dict[domain][slot] = word
                     else:
                         bspn_dict[domain][slot] += (' ' + word)
-        except:
+                        
+        except Exception as e:
+            print(e)
             pdb.set_trace()            
                 
         return bspn_dict
@@ -168,11 +174,26 @@ class Generate_dataclass:
                     data_list.append({'dial_id': one_dial_id,
                         'turn_num': turn_id,
                         'input':generate_input,
-                        'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>","")
+                        'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>",""),
+                        'bspn' : ''
                         })
                 previous_context = previous_context + curr_turn['user'] + curr_turn['resp']
         return data_list
     
+    
+    def change_n_update_bspn(self, bspn, this_bspn, value_dict):
+        this_bspn_dict = self.bspn_to_dict(this_bspn)
+        bspn_dict = self.bspn_to_dict(bspn)
+        
+        for domain in this_bspn_dict.keys():
+            for slot in this_bspn_dict[domain]:
+                new_value = random.choice(value_dict[domain][slot])
+                bspn_dict[domain][slot] = new_value
+                this_bspn_dict[domain][slot] = new_value
+                
+        bspn = self.dict_to_bspn(bspn_dict)
+        this_bspn = self.dict_to_bspn(this_bspn_dict)
+        return bspn, this_bspn
     
     def flatten_aug_data(self, data, aug_num, value_dict):
         data_list = []
@@ -183,30 +204,28 @@ class Generate_dataclass:
             for turn_id in range(turn_num):
                 curr_turn = session[turn_id]
                 assert curr_turn['turn_num'] == turn_id # the turns should be arranged in order
-                for n in aug_num:
-                    # TODO another bspn
-                    generate_input ="generate the user utterance : " + previous_context[-900:] + "<prev_bspn>" + curr_turn['prev_bspn'] + "<this_bspn>" + curr_turn['this_bspn']
-                    # Belief 있으면 append 없으면 append안함
-                    if len(curr_turn['this_bspn'].replace("<sos_b> ", "").replace("<eos_b>",""))!=0:
+                if len(curr_turn['this_bspn'].replace("<sos_b> ", "").replace("<eos_b>",""))!=0:
+                    for n in range(aug_num):
+                        bspn, this_bspn = self.change_n_update_bspn(curr_turn['bspn'], curr_turn['this_bspn'], value_dict)
+                        generate_input ="generate the user utterance : " + previous_context[-900:] + "<prev_bspn>" + curr_turn['prev_bspn'] + "<this_bspn>" + this_bspn
                         data_list.append({'dial_id': one_dial_id,
                             'turn_num': turn_id,
+                            'aug' : n,
                             'input':generate_input,
-                            'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>","")
+                            'output' : curr_turn['user'].replace("<sos_u>","").replace("<eos_u>",""),
+                            'bspn' : bspn
                             })
                 previous_context = previous_context + curr_turn['user'] + curr_turn['resp']
         return data_list
 
-
-
     # 이 함수 있어야해 ?
     def make_data_list(self, raw_data, aug_num = None):
         data_id_list = self.tokenize_raw_data(raw_data) # give labled data list too
-        
         if aug_num:
             value_dict = self.make_value_dict(raw_data)
             data_list = self.flatten_aug_data(data_id_list, aug_num, value_dict)
         else:
-            data_list = self.flatten_data(data_id_list, aug_num)
+            data_list = self.flatten_data(data_id_list)
         return data_list
 
     def filter_data(self, raw, filter, use_label):
@@ -257,32 +276,35 @@ class Generate_dataclass:
         return new_raw
         
     def get_filtered_batches(self, batch_size, mode, aug_num = None): 
-        batch_list = []
-        idx_list = []
+        batch_list, idx_list, bspn_list = [], [] ,[]
         if mode == 'train':
             raw_data = self.train_raw_data[:int(len(self.train_raw_data) * 0.9)]
             self.train_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.train_data_list 
+            
         elif mode == 'dev':
             raw_data= self.train_raw_data[int(len(self.train_raw_data) * 0.9):]
-            # raw_data = self.filter_data(self.train_raw_data, self.labeled_data, use_label = False)
             self.dev_data_list = self.make_data_list(raw_data) # make dataset with labeled data
             all_data_list = self.dev_data_list
+            
         elif mode == 'gen':
             raw_data= self.train_raw_data
-            
             self.gen_data_list = self.make_data_list(raw_data, aug_num) # make dataset with labeled data
             all_data_list =  self.gen_data_list
         else:
             raise Exception('Wrong Mode!!!')
         
-        all_input_data_list, all_output_data_list, all_index_list = [], [], []
-        for item in all_data_list:  
-            dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
+        all_input_data_list, all_output_data_list, all_index_list, all_bspn_list = [], [], [], []
+        
+        for item in all_data_list:
+            if aug_num:
+                dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])+'[a]' + str(item['aug'])
+            else:
+                dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
             all_input_data_list.append(item['input'])
             all_output_data_list.append(item['output'])
             all_index_list.append(dial_turn_key)
-            
+            all_bspn_list.append(item['bspn'])
         data_num = len(all_input_data_list)
         batch_num = int(data_num/batch_size) + 1
 
@@ -291,31 +313,32 @@ class Generate_dataclass:
             if start_idx > data_num - 1:
                 break
             end_idx = min(end_idx, data_num - 1)
-            one_input_batch_list, one_output_batch_list, one_index_list = [], [], []
+            one_input_batch_list, one_output_batch_list, one_index_list, one_bspn_list = [], [], [], []
+            
             for idx in range(start_idx, end_idx):
                 one_input_batch_list.append(all_input_data_list[idx])
                 one_output_batch_list.append(all_output_data_list[idx])
                 one_index_list.append(all_index_list[idx])
-                
-                
+                one_bspn_list.append(all_bspn_list[idx])
+            
             one_batch = [one_input_batch_list, one_output_batch_list]
             one_idx = one_index_list
+            one_bspn = one_bspn_list
+                        
             batch_list.append(one_batch)
             idx_list.append(one_idx)
-        out_str = f'Overall Number of datapoints of {mode} is {str(data_num)}  and batches is {str(len(batch_list))}'
-            
-        self.log.info (out_str)
+            bspn_list.append(one_bspn)
         
-        return batch_list, idx_list
+        return batch_list, idx_list, bspn_list
             
     def build_iterator(self, batch_size, mode, aug_num = None):
-        batch_list, idx_list= self.get_filtered_batches(batch_size, mode, aug_num)
+        batch_list, idx_list, bspn_list= self.get_filtered_batches(batch_size, mode, aug_num)
         if mode == 'train' or mode == 'dev':
             for batch in batch_list:
                 yield batch
         elif mode == 'gen':
-            for batch, idx in zip(batch_list, idx_list):
-                yield batch, idx
+            for batch, idx, bspn in zip(batch_list, idx_list, bspn_list):
+                yield batch, idx, bspn
             
 
 

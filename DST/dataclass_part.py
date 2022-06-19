@@ -22,9 +22,7 @@ class DSTMultiWozData:
         debugging = False):
         self.log = self.log_setting(log_path)
         self.tokenizer = tokenizer
-        self.log.info ('Original Tokenizer Size is %d' % len(self.tokenizer))
         self.special_token_list = self.add_special_tokens()
-        self.log.info ('Tokenizer Size after extension is %d' % len(self.tokenizer))
         self.pad_token_id = self.tokenizer.convert_tokens_to_ids(['<_PAD_>'])[0]
         self.sos_context_token_id = self.tokenizer.convert_tokens_to_ids(['<sos_context>'])[0]
         self.eos_context_token_id = self.tokenizer.convert_tokens_to_ids(['<eos_context>'])[0]
@@ -37,7 +35,6 @@ class DSTMultiWozData:
 
         self.bos_token = self.tokenizer.convert_ids_to_tokens([self.bos_token_id])[0]
         self.eos_token = self.tokenizer.convert_ids_to_tokens([self.eos_token_id])[0]
-        self.log.info ('bos token is {}, eos token is {}'.format(self.bos_token, self.eos_token))
 
         self.all_sos_token_id_list = []
         for token in all_sos_token_list:

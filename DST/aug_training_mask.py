@@ -53,6 +53,7 @@ class Aug_training:
         generated_dict = self.get_generated_dict(raw_data, self.aug_tokenizer, self.aug_model, self.change_rate, \
             self.aug_num, self.batch_size, self.device, self.log,self.log_interval)
         
+        
         raw_data_similar = []
         for _, dial in enumerate(raw_data):
             for n in range(self.aug_num):

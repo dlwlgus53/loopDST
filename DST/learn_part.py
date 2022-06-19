@@ -14,7 +14,7 @@ import logging.handlers
 from trainer_part import tagging, train, evaluate
 from modelling.T5Model import T5Gen_Model
 from dataclass_part import DSTMultiWozData
-from aug_training import Aug_training
+from aug_training_gen import Aug_training
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -40,6 +40,8 @@ def parse_config():
     parser.add_argument('--model_name', type=str, help='t5-base or t5-large or facebook/bart-base or facebook/bart-large')
     parser.add_argument('--pretrained_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     parser.add_argument('--init_label_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
+    parser.add_argument("--aug_model_path", type=str, default="None", help="confidence percent")
+    
     # training configuration
     parser.add_argument('--optimizer_name', default='adafactor', type=str, help='which optimizer to use during training, adam or adafactor')
     parser.add_argument('--dropout', type=float, default=0.1)
@@ -62,6 +64,7 @@ def parse_config():
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument("--confidence_percent", type=float, default=0.5, help="confidence percent")
     parser.add_argument("--aug_rate", type=float, default=0.2, help="confidence percent")
+    
     
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
@@ -102,7 +105,6 @@ def get_optimizers(model, args):
     return optimizer, scheduler
 
 def load_model(args, data, cuda_available, load_pretrained = True):
-    log.info ('Start loading model...')
     if args.pretrained_path != 'None' and load_pretrained:
         model = T5Gen_Model(args.pretrained_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
             add_special_decoder_token=add_special_decoder_token, is_training=True)
@@ -118,7 +120,6 @@ def load_model(args, data, cuda_available, load_pretrained = True):
         model = model.to(device)
     else:
         pass
-    log.info ('Model loaded')
     return model
 
 
@@ -229,8 +230,9 @@ if __name__ == '__main__':
     
     
     if args.aug_method: pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
-        data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu)
+        data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu, model_path = args.aug_model_path)
     
+    log.info("load teacher model")
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
     min_dev_loss = 1e10
@@ -244,9 +246,11 @@ if __name__ == '__main__':
         ####################### tagging ################################
         tagging(args,model,data,log, cuda_available, device)
         ##################### training #################################
+        log.info("load student model")
         student= load_model(args, data, cuda_available, load_pretrained = False)
         optimizer, scheduler = load_optimizer(student, args) # 이거 바꿨음.. 새걸로
         if args.aug_method:
+            log.info("aug data training")
             aug_train, aug_dev = pre_trainer.augment()
             student = pre_trainer.train(args, aug_train, aug_dev,student, args.aug_epoch, optimizer, scheduler)
             
