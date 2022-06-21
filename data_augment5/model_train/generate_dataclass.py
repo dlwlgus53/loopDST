@@ -96,38 +96,6 @@ class Generate_dataclass:
             print(f"error : {dial_id}")
             bspn_dict = {}
         return bspn_dict
-
-    # def bspn_to_dict(self, bspn):
-    #     bspn =bspn.replace("<sos_b> ",'').replace("<eos_b>","").split(" ")
-    #     bspn_dict = {}
-        
-    #     domain = ''
-    #     slot = ''
-    #     try:
-    #         for word in bspn:
-    #             if len(word)==0:continue
-    #             if word[0] == '[':
-    #                 domain = word[1:-1]
-    #                 slot = ''
-    #                 bspn_dict[domain] = {}
-    #             elif word in slot_info[domain]:
-    #                 slot = word
-    #                 bspn_dict[domain][slot] = ''
-    #             else:
-    #                 if domain == '' or slot == '': # wrong slot name
-    #                     print(f"error : domain {domain} slot {word}")
-    #                     print(word)
-    #                     continue
-    #                 if len(bspn_dict[domain][slot]) == 0:
-    #                     bspn_dict[domain][slot] = word
-    #                 else:
-    #                     bspn_dict[domain][slot] += (' ' + word)
-                        
-    #     except Exception as e:
-    #         print(e)
-    #         pdb.set_trace()            
-                
-    #     return bspn_dict
     
     def dict_to_bspn(self,bspn_dict):
         slot_info.keys()
@@ -172,20 +140,15 @@ class Generate_dataclass:
                                 one_turn_dict['prev_bspn'] = ''
                                 one_turn_dict['this_bspn'] = turn[key]
                             else:
-                                # prev_turn_bspn_dict = self.bspn_to_dict(one_sess_list[-1]['bspn'])
-                                # turn_bspn_dict = self.bspn_to_dict(turn[key])
                                 prev_bspn_dict = self.bspn_to_dict(one_sess_list[-1]['dial_id'], one_sess_list[-1]['turn_num'])
                                 bspn_dict = self.bspn_to_dict(turn['dial_id'], turn['turn_num'])
                                 this_bspn_dict = self.extract_now_bspn(prev_bspn_dict, bspn_dict)
-
                                 one_turn_dict['prev_bspn_dict'] = prev_bspn_dict
                                 one_turn_dict['bspn_dict'] = bspn_dict
                                 one_turn_dict['this_bspn_dict'] = this_bspn_dict
-                                # print(prev_bspn_dict)
-                                # print(bspn_dict)
-                                # print(this_bspn_dict)
                                 one_turn_dict['prev_bspn'] = one_sess_list[-1]['bspn']
                                 one_turn_dict['this_bspn'] = self.dict_to_bspn(this_bspn_dict)
+                                
                 one_sess_list.append(one_turn_dict)
             all_session_list.append(one_sess_list)
         assert len(all_session_list) == len(raw_data_list)
@@ -391,7 +354,6 @@ class Generate_dataclass:
         batch_input_id_list, batch_output_id_list = batch
         batch_input = self.tokenizer(batch_input_id_list, padding = True, truncation = True)
         batch_output = self.tokenizer(batch_output_id_list, padding = True, truncation = True)
-        
         source_input = torch.tensor(batch_input['input_ids'])
         source_mask = torch.tensor(batch_input['attention_mask'])
         target_input = torch.tensor(batch_output['input_ids'])
