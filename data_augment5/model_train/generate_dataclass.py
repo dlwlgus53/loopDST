@@ -41,16 +41,27 @@ class Generate_dataclass:
         self.tokenizer = tokenizer
         self.debugging = debugging
         
+        bspn_data_path = "for_bspn.json"
+        
         if data_path_prefix:
             train_json_path = data_path_prefix + '/multiwoz-fine-processed-tenpercent.json' 
+            bspn_dict_path = data_path_prefix + '/for_bspn.json' 
+            
             if self.debugging : 
                 small_path = data_path_prefix + '/multiwoz-fine-processed-small_dev.json' 
                 train_json_path = small_path
+                
+                
             with open(train_json_path) as f:
                 self.train_raw_data = json.load(f)
-        
+                
+                
+                
+        with open(bspn_data_path) as f:
+            self.raw_bspn_dict = json.load(f)
         if raw_data:
             self.train_raw_data = raw_data
+
 
 
     def log_setting(self, log_path):
@@ -70,66 +81,78 @@ class Generate_dataclass:
     
     
     
-    def bspn_split_this(self,prev_bspn_dict, bspn_dict):
+    def extract_now_bspn(self,prev_bspn_dict, bspn_dict):
         this_bspn = {}
-        
-        for domain in bspn_dict:
-            if domain not in prev_bspn_dict:
-                this_bspn[domain] = bspn_dict[domain]
-                continue
-            for slot in bspn_dict[domain]:
-                value = bspn_dict[domain][slot]
-                if slot in prev_bspn_dict[domain] and value == prev_bspn_dict[domain][slot]:
-                    pass
-                else:
-                    if domain in this_bspn:
-                        this_bspn[domain][slot] = value
-                    else:
-                        this_bspn[domain] = {}
-                        this_bspn[domain][slot] = value
-                        
+        for slot in bspn_dict:
+            if slot not in prev_bspn_dict or prev_bspn_dict[slot] != bspn_dict[slot]:
+                this_bspn[slot] = bspn_dict[slot]
         return  this_bspn
-
-    def bspn_to_dict(self, bspn):
-        
-        bspn =bspn.replace("<sos_b> ",'').replace("<eos_b>","").split(" ")
-        bspn_dict = {}
-        
-        domain = ''
-        slot = ''
+    
+    
+    def bspn_to_dict(self, dial_id, turn_id):
         try:
-            for word in bspn:
-                if len(word)==0:continue
-                if word[0] == '[':
-                    domain = word[1:-1]
-                    slot = ''
-                    bspn_dict[domain] = {}
-                elif word in slot_info[domain]:
-                    slot = word
-                    bspn_dict[domain][slot] = ''
-                else:
-                    if domain == '' or slot == '': # wrong slot name
-                        print(f"error : domain {domain} slot {word}")
-                        print(word)
-                        continue
-                    if len(bspn_dict[domain][slot]) == 0:
-                        bspn_dict[domain][slot] = word
-                    else:
-                        bspn_dict[domain][slot] += (' ' + word)
-                        
-        except Exception as e:
-            print(e)
-            pdb.set_trace()            
-                
+            bspn_dict = self.raw_bspn_dict[dial_id.upper()]['log'][turn_id]['belief']
+        except :
+            print(f"error : {dial_id}")
+            bspn_dict = {}
         return bspn_dict
+
+    # def bspn_to_dict(self, bspn):
+    #     bspn =bspn.replace("<sos_b> ",'').replace("<eos_b>","").split(" ")
+    #     bspn_dict = {}
+        
+    #     domain = ''
+    #     slot = ''
+    #     try:
+    #         for word in bspn:
+    #             if len(word)==0:continue
+    #             if word[0] == '[':
+    #                 domain = word[1:-1]
+    #                 slot = ''
+    #                 bspn_dict[domain] = {}
+    #             elif word in slot_info[domain]:
+    #                 slot = word
+    #                 bspn_dict[domain][slot] = ''
+    #             else:
+    #                 if domain == '' or slot == '': # wrong slot name
+    #                     print(f"error : domain {domain} slot {word}")
+    #                     print(word)
+    #                     continue
+    #                 if len(bspn_dict[domain][slot]) == 0:
+    #                     bspn_dict[domain][slot] = word
+    #                 else:
+    #                     bspn_dict[domain][slot] += (' ' + word)
+                        
+    #     except Exception as e:
+    #         print(e)
+    #         pdb.set_trace()            
+                
+    #     return bspn_dict
     
     def dict_to_bspn(self,bspn_dict):
+        slot_info.keys()
         bspn = '<sos_b>'
+        temp = {
+            "taxi": {},
+            "police": {},
+            "hospital": {},
+            "hotel": {},
+            "attraction": {},
+            "train": {},
+            "restaurant": {}}
+
         
-        for domain in bspn_dict:
-            bspn += (" [" + domain + "]")
-            for slot in bspn_dict[domain]:
-                bspn += (' ' + slot + ' ' + bspn_dict[domain][slot])
+        for domain_slot in bspn_dict:
+            domain = domain_slot.split("-")[0]
+            slot = domain_slot.split("-")[1]
+            temp[domain][slot] = bspn_dict[domain_slot]
+        
+        
+        for domain in slot_info.keys():
+            if len(temp[domain])>0:
+                bspn += (" [" + domain + "]")
+                for slot in temp[domain]:
+                    bspn += (' ' + slot + ' ' + temp[domain][slot])
         bspn += ' <eos_b>'
         return bspn
 
@@ -149,9 +172,18 @@ class Generate_dataclass:
                                 one_turn_dict['prev_bspn'] = ''
                                 one_turn_dict['this_bspn'] = turn[key]
                             else:
-                                prev_turn_bspn_dict = self.bspn_to_dict(one_sess_list[-1]['bspn'])
-                                turn_bspn_dict = self.bspn_to_dict(turn[key])
-                                this_bspn_dict = self.bspn_split_this(prev_turn_bspn_dict, turn_bspn_dict)
+                                # prev_turn_bspn_dict = self.bspn_to_dict(one_sess_list[-1]['bspn'])
+                                # turn_bspn_dict = self.bspn_to_dict(turn[key])
+                                prev_bspn_dict = self.bspn_to_dict(one_sess_list[-1]['dial_id'], one_sess_list[-1]['turn_num'])
+                                bspn_dict = self.bspn_to_dict(turn['dial_id'], turn['turn_num'])
+                                this_bspn_dict = self.extract_now_bspn(prev_bspn_dict, bspn_dict)
+
+                                one_turn_dict['prev_bspn_dict'] = prev_bspn_dict
+                                one_turn_dict['bspn_dict'] = bspn_dict
+                                one_turn_dict['this_bspn_dict'] = this_bspn_dict
+                                # print(prev_bspn_dict)
+                                # print(bspn_dict)
+                                # print(this_bspn_dict)
                                 one_turn_dict['prev_bspn'] = one_sess_list[-1]['bspn']
                                 one_turn_dict['this_bspn'] = self.dict_to_bspn(this_bspn_dict)
                 one_sess_list.append(one_turn_dict)
@@ -169,7 +201,7 @@ class Generate_dataclass:
                 curr_turn = session[turn_id]
                 assert curr_turn['turn_num'] == turn_id # the turns should be arranged in order
                 generate_input ="generate the user utterance : " + previous_context[-900:] + "<prev_bspn>" + curr_turn['prev_bspn'] + "<this_bspn>" + curr_turn['this_bspn']
-                # Belief 있으면 append 없으면 append안함
+                # Belief 있으면 append 없으면 append안함 TODO
                 if len(curr_turn['this_bspn'].replace("<sos_b> ", "").replace("<eos_b>",""))!=0:
                     data_list.append({'dial_id': one_dial_id,
                         'turn_num': turn_id,
@@ -181,16 +213,13 @@ class Generate_dataclass:
         return data_list
     
     
-    def change_n_update_bspn(self, bspn, this_bspn, value_dict):
-        this_bspn_dict = self.bspn_to_dict(this_bspn)
-        bspn_dict = self.bspn_to_dict(bspn)
-        
-        for domain in this_bspn_dict.keys():
-            for slot in this_bspn_dict[domain]:
+    def change_n_update_bspn(self,bspn_dict, this_bspn_dict, value_dict):
+        for domain_slot in this_bspn_dict.keys():
+            domain, slot = domain_slot.split("-")[0], domain_slot.split("-")[1]
+            if domain in this_bspn_dict and slot in this_bspn_dict[domain]:
                 new_value = random.choice(value_dict[domain][slot])
                 bspn_dict[domain][slot] = new_value
                 this_bspn_dict[domain][slot] = new_value
-                
         bspn = self.dict_to_bspn(bspn_dict)
         this_bspn = self.dict_to_bspn(this_bspn_dict)
         return bspn, this_bspn
@@ -206,7 +235,12 @@ class Generate_dataclass:
                 assert curr_turn['turn_num'] == turn_id # the turns should be arranged in order
                 if len(curr_turn['this_bspn'].replace("<sos_b> ", "").replace("<eos_b>",""))!=0:
                     for n in range(aug_num):
-                        bspn, this_bspn = self.change_n_update_bspn(curr_turn['bspn'], curr_turn['this_bspn'], value_dict)
+                        if curr_turn['turn_num'] ==0:
+                            bspn, this_bspn = '', ''
+                        else:
+                            this_bspn_dict = curr_turn['this_bspn_dict']
+                            bspn_dict = curr_turn['bspn_dict']
+                            bspn, this_bspn = self.change_n_update_bspn(bspn_dict, this_bspn_dict, value_dict)
                         generate_input ="generate the user utterance : " + previous_context[-900:] + "<prev_bspn>" + curr_turn['prev_bspn'] + "<this_bspn>" + this_bspn
                         data_list.append({'dial_id': one_dial_id,
                             'turn_num': turn_id,
@@ -246,24 +280,20 @@ class Generate_dataclass:
             'train' : {},
             'restaurant': {},
             'hospital': {}
-            
         }
- 
         for dial in raw:
-            for turn in dial:
-                bspn_dict = self.bspn_to_dict(turn['bspn'])
-                for domain in bspn_dict.keys():
-                    sv = bspn_dict[domain]
-                    for slot in sv:
-                        if slot in value_dict[domain]:
-                            values = value_dict[domain][slot]
-                            v = sv[slot]
-                            values.append(v)
-                            values = list(set(values))
-                            value_dict[domain][slot] = values
-                        else:
-                            v = sv[slot]
-                            value_dict[domain][slot] = [v]
+            for turn_num, turn in enumerate(dial):
+                bspn_dict = self.bspn_to_dict(turn['dial_id'], turn_num)
+                for domain_slot in bspn_dict.keys():
+                    domain,slot = domain_slot.split("-")[0], domain_slot.split("-")[1]
+                    value = bspn_dict[domain_slot]
+                    if slot in value_dict[domain]:
+                        values = value_dict[domain][slot]
+                        values.append(value)
+                        values = list(set(values))
+                        value_dict[domain][slot] = values
+                    else:
+                        value_dict[domain][slot] = [value]
         return value_dict
     
     def replace_label(self, raw, label):

@@ -12,7 +12,11 @@ import copy
 import torch.nn as nn
 from collections import defaultdict
 from transformers import T5Tokenizer, T5ForConditionalGeneration,Adafactor, T5Config
-from .model_train.generate_dataclass import Generate_dataclass
+try:
+    from .model_train.generate_dataclass import Generate_dataclass
+except:
+    from model_train.generate_dataclass import Generate_dataclass
+    
 
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
@@ -166,7 +170,7 @@ def split_by_dial(raw_set):
 def get_generated_dict(raw_data, tokenizer, model, aug_num, device ,log, log_interval = None):
     number_of_gpu = 1
     batch_size_per_gpu = 10
-    data = Generate_dataclass(tokenizer, raw_data = raw_data,  log = log, debugging = False)
+    data = Generate_dataclass(tokenizer, raw_data = raw_data, log = log, debugging = False)
     generated_dict= generate_new_text(model, data, device, log, number_of_gpu, batch_size_per_gpu, aug_num, log_interval)
     return generated_dict
     
