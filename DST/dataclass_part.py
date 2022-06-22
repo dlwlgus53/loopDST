@@ -63,7 +63,7 @@ class DSTMultiWozData:
         test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
         
         if self.debugging : 
-            small_path = data_path_prefix + '/multiwoz-fine-processed-small-1.json' 
+            small_path = data_path_prefix + '/multiwoz-fine-processed-small.json' 
             train_json_path = dev_json_path = test_json_path = small_path
 
         with open(train_json_path) as f:
@@ -117,7 +117,7 @@ class DSTMultiWozData:
             for turn in raw_data_list[idx]: 
                 one_turn_dict = {}
                 for key in turn:
-                    if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db', 'bspn_dict', 'bsdx_reform']:
+                    if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db']:
                         one_turn_dict[key] = turn[key]
                     else: 
                         value_text = turn[key]
