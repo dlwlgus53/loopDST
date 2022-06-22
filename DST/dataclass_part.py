@@ -117,7 +117,7 @@ class DSTMultiWozData:
             for turn in raw_data_list[idx]: 
                 one_turn_dict = {}
                 for key in turn:
-                    if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db']:
+                    if key in ['dial_id', 'pointer', 'turn_domain', 'turn_num', 'aspn', 'dspn', 'aspn_reform', 'db', 'bspn_dict', 'bsdx_reform']:
                         one_turn_dict[key] = turn[key]
                     else: 
                         value_text = turn[key]

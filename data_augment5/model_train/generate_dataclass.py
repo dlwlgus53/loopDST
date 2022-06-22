@@ -41,24 +41,16 @@ class Generate_dataclass:
         self.tokenizer = tokenizer
         self.debugging = debugging
         
-        bspn_data_path = "for_bspn.json"
-        
         if data_path_prefix:
             train_json_path = data_path_prefix + '/multiwoz-fine-processed-tenpercent.json' 
-            bspn_dict_path = data_path_prefix + '/for_bspn.json' 
+            bspn_data_path = data_path_prefix + '/for_bspn.json' 
             
             if self.debugging : 
                 small_path = data_path_prefix + '/multiwoz-fine-processed-small_dev.json' 
                 train_json_path = small_path
                 
-                
             with open(train_json_path) as f:
                 self.train_raw_data = json.load(f)
-                
-                
-                
-        with open(bspn_data_path) as f:
-            self.raw_bspn_dict = json.load(f)
         if raw_data:
             self.train_raw_data = raw_data
 
@@ -88,16 +80,9 @@ class Generate_dataclass:
                 this_bspn[slot] = bspn_dict[slot]
         return  this_bspn
     
-    
-    def bspn_to_dict(self, dial_id, turn_id):
-        try:
-            bspn_dict = self.raw_bspn_dict[dial_id.upper()]['log'][turn_id]['belief']
-        except :
-            print(f"error : {dial_id}")
-            bspn_dict = {}
-        return bspn_dict
-    
-    def dict_to_bspn(self,bspn_dict):
+    def dict_to_bspn(self,bspn_dict,bsdx_reform):
+        bs_idx = bsdx_reform.replace("<sos_b> ").replace(" <eos_b>","").split(" ")
+        
         slot_info.keys()
         bspn = '<sos_b>'
         temp = {
@@ -115,13 +100,15 @@ class Generate_dataclass:
             slot = domain_slot.split("-")[1]
             temp[domain][slot] = bspn_dict[domain_slot]
         
-        
+        pdb.set_trace()
         for domain in slot_info.keys():
             if len(temp[domain])>0:
                 bspn += (" [" + domain + "]")
                 for slot in temp[domain]:
                     bspn += (' ' + slot + ' ' + temp[domain][slot])
         bspn += ' <eos_b>'
+        
+        
         return bspn
 
 
@@ -133,22 +120,22 @@ class Generate_dataclass:
             for turn in raw_data_list[idx]: 
                 one_turn_dict = {}
                 for key in turn:
-                    if key in ['dial_id', 'turn_num','user', 'resp', 'bspn']:
+                    if key in ['dial_id', 'turn_num','user', 'resp', 'bspn', 'bspn_dict']:
                         one_turn_dict[key] = turn[key]
                         if key == 'bspn': # 이전것을 넣어야 할 것 같은데?!
                             if len(one_sess_list) == 0:
                                 one_turn_dict['prev_bspn'] = ''
                                 one_turn_dict['this_bspn'] = turn[key]
+                                
                             else:
-                                prev_bspn_dict = self.bspn_to_dict(one_sess_list[-1]['dial_id'], one_sess_list[-1]['turn_num'])
-                                bspn_dict = self.bspn_to_dict(turn['dial_id'], turn['turn_num'])
+                                prev_bspn_dict = one_sess_list[-1]['bspn_dict']
+                                bspn_dict = turn['bspn_dict']
                                 this_bspn_dict = self.extract_now_bspn(prev_bspn_dict, bspn_dict)
+
                                 one_turn_dict['prev_bspn_dict'] = prev_bspn_dict
-                                one_turn_dict['bspn_dict'] = bspn_dict
                                 one_turn_dict['this_bspn_dict'] = this_bspn_dict
                                 one_turn_dict['prev_bspn'] = one_sess_list[-1]['bspn']
-                                one_turn_dict['this_bspn'] = self.dict_to_bspn(this_bspn_dict)
-                                
+                                one_turn_dict['this_bspn'] = self.dict_to_bspn(this_bspn_dict, turn['bsdx_reform'])
                 one_sess_list.append(one_turn_dict)
             all_session_list.append(one_sess_list)
         assert len(all_session_list) == len(raw_data_list)
@@ -176,15 +163,15 @@ class Generate_dataclass:
         return data_list
     
     
-    def change_n_update_bspn(self,bspn_dict, this_bspn_dict, value_dict):
+    def change_n_update_bspn(self,bspn_dict, this_bspn_dict, value_dict, bsdx_reform):
         for domain_slot in this_bspn_dict.keys():
             domain, slot = domain_slot.split("-")[0], domain_slot.split("-")[1]
             if domain in this_bspn_dict and slot in this_bspn_dict[domain]:
                 new_value = random.choice(value_dict[domain][slot])
                 bspn_dict[domain][slot] = new_value
                 this_bspn_dict[domain][slot] = new_value
-        bspn = self.dict_to_bspn(bspn_dict)
-        this_bspn = self.dict_to_bspn(this_bspn_dict)
+        bspn = self.dict_to_bspn(bspn_dict, bsdx_reform)
+        this_bspn = self.dict_to_bspn(this_bspn_dict, bsdx_reform)
         return bspn, this_bspn
     
     def flatten_aug_data(self, data, aug_num, value_dict):
@@ -203,7 +190,7 @@ class Generate_dataclass:
                         else:
                             this_bspn_dict = curr_turn['this_bspn_dict']
                             bspn_dict = curr_turn['bspn_dict']
-                            bspn, this_bspn = self.change_n_update_bspn(bspn_dict, this_bspn_dict, value_dict)
+                            bspn, this_bspn = self.change_n_update_bspn(bspn_dict, this_bspn_dict, value_dict, curr_turn['bsdx_reform'])
                         generate_input ="generate the user utterance : " + previous_context[-900:] + "<prev_bspn>" + curr_turn['prev_bspn'] + "<this_bspn>" + this_bspn
                         data_list.append({'dial_id': one_dial_id,
                             'turn_num': turn_id,
@@ -246,7 +233,7 @@ class Generate_dataclass:
         }
         for dial in raw:
             for turn_num, turn in enumerate(dial):
-                bspn_dict = self.bspn_to_dict(turn['dial_id'], turn_num)
+                bspn_dict = turn['bspn_dict']
                 for domain_slot in bspn_dict.keys():
                     domain,slot = domain_slot.split("-")[0], domain_slot.split("-")[1]
                     value = bspn_dict[domain_slot]
