@@ -14,7 +14,6 @@ import logging.handlers
 from trainer_part import tagging, train, evaluate
 from modelling.T5Model import T5Gen_Model
 from dataclass_part import DSTMultiWozData
-from aug_training_gen import Aug_training
 
 log = logging.getLogger('my_log')
 log.setLevel(logging.INFO)
@@ -192,6 +191,13 @@ if __name__ == '__main__':
  
     args = parse_config()
     
+    if args.aug_method in [1,2,3,4,6]:
+        from aug_training_mask import Aug_training
+    else:
+        from aug_training_gen import Aug_training
+        
+        
+    
     device = torch.device('cuda')
     makedirs(args.ckpt_save_path)
     
@@ -228,10 +234,15 @@ if __name__ == '__main__':
         log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, \
           debugging = args.debugging)
     
+    if args.aug_method in [1,2,3,4,6]:
+        pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
+            data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu)
+    else:
+        pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
+            data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu, model_path = args.aug_model_path)
     
-    if args.aug_method: pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
-        data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu, model_path = args.aug_model_path)
-    
+
+
     log.info("load teacher model")
     model = load_model(args, data, cuda_available)
     optimizer, scheduler = load_optimizer(model, args)
