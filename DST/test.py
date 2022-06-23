@@ -8,10 +8,9 @@ import torch.nn as nn
 from torch.optim import Adam
 from operator import itemgetter
 import torch.nn.functional as F
-from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 import logging
 import logging.handlers
-from trainer_part import tagging, train, evaluate
+from trainer_part import  evaluate
 from modelling.T5Model import T5Gen_Model
 from dataclass_part import DSTMultiWozData
 
@@ -31,11 +30,6 @@ def parse_config():
     parser = argparse.ArgumentParser()
     # dataset configuration
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
-    parser.add_argument('--shuffle_mode', type=str, default='shuffle_session_level', 
-        help="shuffle_session_level or shuffle_turn_level, it controls how we shuffle the training data.")
-    parser.add_argument('--add_prefix', type=str, default='True', 
-        help="True or False, whether we add prefix when we construct the input sequence.")
-    # model configuration
     parser.add_argument('--model_name', type=str, help='t5-base or t5-large or facebook/bart-base or facebook/bart-large')
     parser.add_argument('--pretrained_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
     parser.add_argument('--init_label_path', type=str, default='None', help='the path that stores pretrained checkpoint.')
@@ -69,42 +63,7 @@ def parse_config():
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     parser.add_argument("--aug_method", type=int, help="use augment or not")
     
-    parser.add_argument("--num_of_test", type=int, default = 3, help="use augment or not")
-    
-    
     return parser.parse_args()
-
-def get_optimizers(model, args):
-    no_decay = ["bias", "LayerNorm.weight"]
-    optimizer_grouped_parameters = [
-        {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-            "weight_decay": args.weight_decay,
-        },
-        {
-            "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
-            "weight_decay": 0.0,
-        },
-    ]
-    if args.optimizer_name == 'adam':
-        pass
-    elif args.optimizer_name == 'adafactor':
-        from transformers.optimization import Adafactor, AdafactorSchedule
-        optimizer = Adafactor(
-            optimizer_grouped_parameters,
-            lr=1e-3,
-            eps=(1e-30, 1e-3),
-            clip_threshold=1.0,
-            decay_rate=-0.8,
-            beta1=None,
-            weight_decay=0.0,
-            relative_step=False,
-            scale_parameter=False,
-            warmup_init=False
-        )
-        scheduler = None
-
-    return optimizer, scheduler
 
 def load_model(args, data, cuda_available, load_pretrained = True):
     if args.pretrained_path != 'None' and load_pretrained:
@@ -125,68 +84,7 @@ def load_model(args, data, cuda_available, load_pretrained = True):
     return model
 
 
-def load_optimizer(model, args):
-    optimizer, scheduler = get_optimizers(model, args)
-    optimizer.zero_grad()
-    return optimizer, scheduler
-    
-
-def save_result(epoch, model, one_dev_str,all_dev_result):
-    log.info ('Saving Model...')
-    model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
-
-    if os.path.exists(model_save_path):
-        pass
-    else: # recursively construct directory
-        os.makedirs(model_save_path, exist_ok=True)
-
-    if cuda_available and torch.cuda.device_count() > 1:
-        model.module.save_model(model_save_path)
-    else:
-        model.save_model(model_save_path)
-
-    import json
-    pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
-    with open(pkl_save_path, 'w') as outfile:
-        json.dump(all_dev_result, outfile, indent=4)
-
-    fileData = {}
-    test_output_dir = args.ckpt_save_path
-    for fname in os.listdir(test_output_dir):
-        if fname.startswith(f'epoch_{epoch}'):
-            fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
-        else:
-            pass
-    sortedFiles = sorted(fileData.items(), key=itemgetter(1))
-    max_save_num = 1
-    if len(sortedFiles) < max_save_num:
-        pass
-    else:
-        delete = len(sortedFiles) - max_save_num
-        for x in range(0, delete):
-            one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
-            log.info (one_folder_name)
-            os.system('rm -r ' + one_folder_name)
-
-def get_best_model_path(ckpt_path, num):
-    model_names = []
-    for fname in os.listdir(ckpt_path):
-        if fname.startswith(f'epoch_'):
-            model_names.append(fname)
-    
-    model_names = sorted(model_names, key = lambda x : float(x.split("_")[-1]), reverse=True)
-    return model_names[:num]
-    
-def makedirs(path): 
-   try: 
-        os.makedirs(path) 
-   except OSError: 
-       if not os.path.isdir(path): 
-           raise
-
 if __name__ == '__main__':
-    log_sentence = []
-    # MAKE FOLDER
     if torch.cuda.is_available():
         log.info ('Cuda is available.')
     cuda_available = torch.cuda.is_available()
@@ -201,17 +99,7 @@ if __name__ == '__main__':
         pass
  
     args = parse_config()
-    
-    if args.aug_method in [1,2,3,4,6]:
-        from aug_training_mask import Aug_training
-    else:
-        from aug_training_gen import Aug_training
-        
-        
-    
     device = torch.device('cuda')
-    makedirs(args.ckpt_save_path)
-    
     fileHandler = logging.FileHandler(f'{args.ckpt_save_path}log.txt')
     streamHandler = logging.StreamHandler()
 
@@ -236,7 +124,6 @@ if __name__ == '__main__':
         log.info ('Loading from internet {args.model_name}')
         tokenizer = T5Tokenizer.from_pretrained(args.model_name)
 
-    add_prefix = True
     add_special_decoder_token = True
 
     log.info('Initialize dataclass')
@@ -265,12 +152,8 @@ if __name__ == '__main__':
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         log_sentence.append(f"Epoch {epoch}")
         log.info(f"Epoch {epoch} Tagging start")
-        ####################### tagging ################################
-        tagging(args,model,data,log, cuda_available, device)
-        ##################### training #################################
-        log.info("load student model")
-        student= load_model(args, data, cuda_available, load_pretrained = False)
-        optimizer, scheduler = load_optimizer(student, args) # 이거 바꿨음.. 새걸로
+        model= load_model(args, data, cuda_available, load_pretrained = False)
+
         if args.aug_method:
             log.info("aug data training")
             aug_train, aug_dev = pre_trainer.augment()
@@ -303,32 +186,10 @@ if __name__ == '__main__':
     log_sentence.append(" ".join(score_list))    
     log.info(score_list)
     
-    log.info("Test start")
-    test_models_name = get_best_model_path(args.ckpt_save_path, args.num_of_test)
-    
-    best_model = ''
-    best_score = 0
-    for test_model_name in test_models_name:
-        
-        test_model_path = args.ckpt_save_path + test_model_name
-        model = T5Gen_Model(test_model_path, data.tokenizer, data.special_token_list, dropout=args.dropout, 
-            add_special_decoder_token=add_special_decoder_token, is_training=False)
-
-        if cuda_available:
-            if multi_gpu_training:
-                model = nn.DataParallel(model) # multi-gpu training
-            else:
-                pass
-            model = model.to(device)
-
-        evaluation_score = evaluate(args,model,data,log, cuda_available, device, mode = 'test')
-        log.info(f"{test_model_name} score is {evaluation_score:.2}")
-        if evaluation_score > best_score:
-            best_score = evaluation_score
-            best_model = test_model_name
+    with open(f'{args.ckpt_save_path}log.txt', 'a') as f:
+        for item in log_sentence:
+            f.write("%s\n" % item)
             
-        
-
         
     
     

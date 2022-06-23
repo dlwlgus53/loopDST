@@ -118,6 +118,10 @@ def evaluate(args,model,data,log, cuda_available, device, mode ):
             dev_batch_list = \
             data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='dev_aug')
             dev_batch_num_per_epoch = len(dev_batch_list)
+        elif mode == 'test':
+            dev_batch_list = \
+            data.build_all_evaluation_batch_list(eva_batch_size=args.number_of_gpu * args.batch_size_per_gpu, eva_mode='test')
+            dev_batch_num_per_epoch = len(dev_batch_list)
         log.info (f'Number of {mode} batches is %d' % dev_batch_num_per_epoch)
             
         all_dev_result = []
