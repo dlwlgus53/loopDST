@@ -321,8 +321,8 @@ if __name__ == '__main__':
                 pass
             model = model.to(device)
 
-        evaluation_score = evaluate(args,model,data,log, cuda_available, device, mode = 'test')
-        log.info(f"{test_model_name} score is {evaluation_score:.2}")
+        _, evaluation_score = evaluate(args,model,data,log, cuda_available, device, mode = 'test')
+        log.info(f"{test_model_name} score is {evaluation_score:.2f}")
         if evaluation_score > best_score:
             best_score = evaluation_score
             best_model = test_model_name
