@@ -14,7 +14,11 @@ import logging.handlers
 import copy
 from collections import defaultdict
 from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
-from special_token_list import special_tokens
+try:
+    from special_token_list import special_tokens
+except:
+    from .special_token_list import special_tokens
+    
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
