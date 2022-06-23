@@ -327,6 +327,7 @@ if __name__ == '__main__':
             best_score = evaluation_score
             best_model = test_model_name
             
+    log.info(f"Best model is {best_model}, score is {best_score:.2f}")
         
 
         
