@@ -202,8 +202,10 @@ if __name__ == '__main__':
  
     args = parse_config()
     
-    if args.aug_method in [1,2,3,4,6]:
+    if args.aug_method in [1,2,3,4,6,7]:
         from aug_training_mask import Aug_training
+    elif args.aug_method in [10]:
+        from aug_training_back import Aug_training
     else:
         from aug_training_gen import Aug_training
         
@@ -245,7 +247,7 @@ if __name__ == '__main__':
         log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, \
           debugging = args.debugging)
     
-    if args.aug_method in [1,2,3,4,6]:
+    if args.aug_method in [1,2,3,4,6,7]:
         pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
             data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu)
     else:

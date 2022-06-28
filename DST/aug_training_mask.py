@@ -26,6 +26,9 @@ class Aug_training:
         if aug_method ==3:
             from data_augment3.augment import log_setting, get_generated_dict
             
+        if aug_method ==7:
+            from data_augment7.augment import log_setting, get_generated_dict
+            
         log_setting("aug_log")
         DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
         self.aug_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')

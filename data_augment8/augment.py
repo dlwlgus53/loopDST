@@ -1,4 +1,4 @@
-# generate text, don't change label
+# generate text, always change label
 import torch
 import os
 import json
@@ -133,7 +133,8 @@ def tokenize(input_text,label, tokenizer, change_rate):
 def generate_new_text(model, data, device,log, aug_num, number_of_gpu, batch_size_per_gpu, log_interval=None):
     model.eval()
     generate_dict = {}
-    gen_iterator = data.build_iterator(batch_size=number_of_gpu * batch_size_per_gpu, mode = "gen", aug_num =1) 
+
+    gen_iterator = data.build_iterator(batch_size=number_of_gpu * batch_size_per_gpu, mode = "gen", aug_num =aug_num)
     with torch.no_grad():
         for idx, (gen_batch, key, label)in enumerate(gen_iterator):
             if idx == 0:
@@ -146,10 +147,7 @@ def generate_new_text(model, data, device,log, aug_num, number_of_gpu, batch_siz
             source_input, _, _, _ = \
             data.parse_batch_tensor(gen_batch)
             input_ids = source_input.to(device)
-            outputs = model.generate(input_ids = input_ids, num_return_sequences =aug_num ,num_beams = aug_num + 2)
-            label = [item for item in label for i in range(aug_num)]
-            key = [item.split("[a]")[0] + "[a]" + str(int(item.split("[a]")[-1]) + i) for item in key for i in range(aug_num)]
-            
+            outputs = model.generate(input_ids = input_ids)
             for k, output, bspn in zip(key, outputs, label):
                 text = data.tokenizer.decode(output,skip_special_tokens = True)
                 generate_dict[k] = {'text' : text, 'bspn' : bspn}
@@ -172,13 +170,8 @@ def split_by_dial(raw_set):
 def get_generated_dict(raw_data, tokenizer, model, aug_num, device ,log, log_interval = None):
     number_of_gpu = 1
     batch_size_per_gpu = 10
-    data = Generate_dataclass(tokenizer, raw_data = raw_data, log = log, debugging = False, change_bspn=False)
-    
-    generated_dict= generate_new_text(model = model, data = data, 
-                                      device = device, log = log, 
-                                      aug_num = aug_num, number_of_gpu = number_of_gpu,
-                                      batch_size_per_gpu = batch_size_per_gpu,
-                                      log_interval = log_interval)
+    data = Generate_dataclass(tokenizer, raw_data = raw_data, log = log, debugging = False,  change_bspn=True)
+    generated_dict= generate_new_text(model, data, device, log, number_of_gpu, batch_size_per_gpu, aug_num, log_interval)
     return generated_dict
     
 
@@ -215,8 +208,11 @@ if __name__ == '__main__':
     with open(raw_datapath) as f:
         raw_data = json.load(f)
     # get_generated_dict(raw_data, tokenizer, model, topn,  number_of_gpu, batch_size_per_gpu, device, log, log_interval = None):
-    generated_dict =get_generated_dict(raw_data, tokenizer, model, args.aug_num,\
-        device, log, log_interval = None)
+    
+    generated_dict =get_generated_dict(raw_data = raw_data, tokenizer = tokenizer, 
+                                       model = model, aug_num = args.aug_num,\
+                                    device = device, log = log, log_interval = None)
+    
     raw_data_similar = []
     for dial_idx, dial in enumerate(raw_data):
         # if dial_idx%30 == 0 and dial_idx !=0:log.info(f'saving dials {dial_idx}/{len(sraw_data)} done')

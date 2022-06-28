@@ -1,38 +1,40 @@
+# augmentation for backtranslation
 import sys
 sys.path.append('../../../../')
-sys.path.append('../../../../../')
-
 import torch
 import random
 import copy
 import numpy as np
+import json
+import ontology
 import random
 import os
+import pdb
+from transformers import MarianMTModel, MarianTokenizer
 from dataclass_part import DSTMultiWozData
 from trainer_part import train, evaluate
-from data_augment5.augment import log_setting, get_generated_dict, load_model
-from transformers import T5Tokenizer, T5ForConditionalGeneration,Adafactor, T5Config
+from data_augment10.augment import log_setting, get_generated_dict
+
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class Aug_training:
-    def __init__(self,aug_method, aug_num, change_rate, data, device, log,log_interval, batch_size, model_path = None):
-        
-        
-        if aug_method == 5:
-           from data_augment5.augment import log_setting, get_generated_dict, load_model
-        if aug_method ==8:
-            from data_augment8.augment import log_setting, get_generated_dict, load_model
-        if aug_method ==9:
-            from data_augment9.augment import log_setting, get_generated_dict, load_model
-
-            
+    def __init__(self,aug_method, aug_num, change_rate, data, device, log,log_interval, batch_size):
             
         log_setting("aug_log")
-        self.tokenizer = T5Tokenizer.from_pretrained(model_path)
-        self.model = load_model(model_path, device, multi_gpu_training = True)
+        DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
+        model_name1 = 'Helsinki-NLP/opus-mt-en-fr'
+        model_name2 = 'Helsinki-NLP/opus-mt-fr-en'
+
+        self.tokenizer1 = MarianTokenizer.from_pretrained(model_name1)
+        self.model1 = MarianMTModel.from_pretrained(model_name1).to(DEVICE)
+
+        self.tokenizer2 = MarianTokenizer.from_pretrained(model_name2)
+        self.model2 = MarianMTModel.from_pretrained(model_name2).to(DEVICE)
+        
         self.aug_num = aug_num
+        self.change_rate = change_rate
         self.log = log
         self.get_generated_dict = get_generated_dict
         self.data = data
@@ -46,24 +48,28 @@ class Aug_training:
         except OSError: 
             if not os.path.isdir(path): 
                 raise
-       
+
     def augment(self):
+        
         raw_data = self.data.replace_label(self.data.train_raw_data, self.data.labeled_data)
-        generated_dict = self.get_generated_dict(raw_data, self.tokenizer, self.model, self.aug_num,'cuda', self.log)
+        
+        generated_dict = get_generated_dict(raw_data = raw_data, tokenizer1 = self.tokenizer1,
+                                            tokenizer2 = self.tokenizer2,  model1 = self.model1,
+                                            model2 = self.model2, aug_num = self.aug_num,
+                                            batch_size = self.batch_size, device = 'cuda', 
+                                            log = self.log)
+        
+        
         raw_data_similar = []
-        for dial_idx, dial in enumerate(raw_data):
+        for _, dial in enumerate(raw_data):
             for n in range(self.aug_num):
                 similar_dial = []
                 for turn in dial:
                     idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
                     similar_turn = copy.deepcopy(turn)
-                    if idx in generated_dict:
-                        similar_turn['dial_id'] += f'_v{str(n)}'
-                        similar_turn['user'] = generated_dict[idx]['text']
-                        similar_turn['bspn'] = generated_dict[idx]['bspn']
-                        similar_dial.append(similar_turn)
-                    else:
-                        similar_dial.append(similar_turn) 
+                    similar_turn['dial_id'] += f'_v{str(n)}'
+                    similar_turn['user'] = generated_dict[idx]['text']
+                    similar_dial.append(similar_turn)
                 raw_data_similar.append(similar_dial)
         train = raw_data_similar[:int(len(raw_data_similar) * 0.9)]
         dev = raw_data_similar[int(len(raw_data_similar) * 0.9):]
@@ -83,5 +89,3 @@ class Aug_training:
                 best_model = model
                 best_result = dev_score
         return best_model
-
-
