@@ -231,8 +231,8 @@ def generate_new_text(model, tokenizer,dial_turn_id_list, masked_input_list, \
                     else :
                         pass
             
-            decode_mask_label = tokenizer.decode(masked_label[1 : -2])
-            decode_label = tokenizer.decode(decode_label_[1 : -2])
+            decode_mask_label = tokenizer.decode(masked_label[1 : -1])
+            decode_label = tokenizer.decode(decode_label_[1 : -1])
             
             decode_mask_label = change_special_token(decode_mask_label)
             decode_label = change_special_token(decode_label)
