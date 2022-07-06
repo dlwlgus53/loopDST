@@ -173,7 +173,7 @@ def split_by_dial(raw_set):
 def get_generated_dict(raw_data, tokenizer, model, aug_num, device ,log, log_interval = None):
     number_of_gpu = 1
     batch_size_per_gpu = 10
-    data = Generate_dataclass(tokenizer, raw_data = raw_data, log = log, debugging = False, change_bspn=False)
+    data = Generate_dataclass(tokenizer, raw_data = raw_data, log = log, debugging = False, change_bspn=True)
     
     generated_dict= generate_new_text(model = model, data = data, 
                                       device = device, log = log, 

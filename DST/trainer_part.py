@@ -131,11 +131,12 @@ def evaluate(args,model,data,log, cuda_available, device, mode ):
             dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
             for item in dev_batch_parse_dict:
                 all_dev_result.append(item)
-        from compute_joint_acc import compute_jacc
+        from compute_joint_acc import compute_jacc, compute_sacc
         all_dev_result = zip_result(all_dev_result)
         dev_score = compute_jacc(data=all_dev_result) * 100
+        sacc_score = compute_sacc(data=all_dev_result) * 100
     
-    return all_dev_result, dev_score
+    return all_dev_result, dev_score, sacc_score
 
 
 def zip_result(prediction):

@@ -71,7 +71,8 @@ def parse_config():
     
     parser.add_argument("--num_of_test", type=int, default = 3, help="use augment or not")
     
-    
+    parser.add_argument("--patient", type=int, default = 3, help="use augment or not")
+    parser.add_argument("--use_dev_aug", type=int, default = 1, help="use augment or not")
     return parser.parse_args()
 
 def get_optimizers(model, args):
@@ -175,7 +176,7 @@ def get_best_model_path(ckpt_path, num):
             model_names.append(fname)
     
     model_names = sorted(model_names, key = lambda x : float(x.split("_")[-1]), reverse=True)
-    return model_names[:num]
+    return model_names
     
 def makedirs(path): 
    try: 
@@ -206,6 +207,8 @@ if __name__ == '__main__':
         from aug_training_mask import Aug_training
     elif args.aug_method in [10]:
         from aug_training_back import Aug_training
+    elif args.aug_method in [11,12]:
+        from aug_training_EDA import Aug_training
     else:
         from aug_training_gen import Aug_training
         
@@ -247,12 +250,18 @@ if __name__ == '__main__':
         log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, \
           debugging = args.debugging)
     
-    if args.aug_method in [1,2,3,4,6,7]:
-        pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
-            data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu)
-    else:
-        pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
-            data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu, model_path = args.aug_model_path)
+    if args.epoch_num != 0:
+        if args.aug_method in [1,2,3,4,6,7]:
+            pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
+                data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu, args.use_dev_aug)
+        elif args.aug_method in [10] : # back translation
+            pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
+                data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu,  args.use_dev_aug)
+        elif args.aug_method in [11,12] : # EDA
+            pre_trainer = Aug_training(args.aug_method, args.aug_num, data, log, args.log_interval,  args.use_dev_aug)
+        else: # generation
+            pre_trainer = Aug_training(args.aug_method, args.aug_num, args.aug_rate,\
+                data, 'cuda', log, args.log_interval, args.eval_batch_size_per_gpu, args.use_dev_aug, model_path = args.aug_model_path)
     
 
 
@@ -279,7 +288,13 @@ if __name__ == '__main__':
             student = pre_trainer.train(args, aug_train, aug_dev,student, args.aug_epoch, optimizer, scheduler)
             
         mini_best_result, mini_best_str, mini_score_list = 0, '', ['mini epoch']
+        
+        not_progressed =0
         for mini_epoch in range(args.mini_epoch):
+            not_progressed +=1
+            if not_progressed > args.patient:
+                log.info(f"ealy stopped in {mini_epoch}")
+                break
             log.info(f"Epoch {epoch}-{mini_epoch} training start")
             train_loss = train(args,student,optimizer, scheduler, data,log, cuda_available, device, mode = 'train_loop')
             log.info (f'Epoch {epoch}-{mini_epoch} total training loss is %5f' % (train_loss))
@@ -290,6 +305,7 @@ if __name__ == '__main__':
             mini_score_list.append(f'{dev_score:.2f}')
             
             if dev_score > mini_best_result:
+                not_progressed =0
                 model = student
                 one_dev_str = 'dev_joint_accuracy_{}'.format(round(dev_score,2))
                 mini_best_str = one_dev_str
@@ -309,7 +325,7 @@ if __name__ == '__main__':
     test_models_name = get_best_model_path(args.ckpt_save_path, args.num_of_test)
     
     best_model = ''
-    best_score = 0
+    best_score, best_sacc = 0,0
     for test_model_name in test_models_name:
         
         test_model_path = args.ckpt_save_path + test_model_name
@@ -323,13 +339,15 @@ if __name__ == '__main__':
                 pass
             model = model.to(device)
 
-        _, evaluation_score = evaluate(args,model,data,log, cuda_available, device, mode = 'test')
+        _, evaluation_score, sacc_score = evaluate(args,model,data,log, cuda_available, device, mode = 'test')
         log.info(f"{test_model_name} score is {evaluation_score:.2f}")
         if evaluation_score > best_score:
             best_score = evaluation_score
             best_model = test_model_name
+            best_sacc = sacc_score
             
-    log.info(f"Best model is {best_model}, score is {best_score:.2f}")
+            
+    log.info(f"Best model is {best_model}, score is {best_score:.2f}, {best_sacc}")
         
 
         

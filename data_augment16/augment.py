@@ -1,4 +1,7 @@
-# generate text, don't change label
+# https://jimmy-ai.tistory.com/196
+# augment data 저장
+# augmen only!
+import random
 import torch
 import os
 import json
@@ -7,17 +10,9 @@ import argparse
 import copy
 import logging
 import logging.handlers
-import random
 import copy
-import torch.nn as nn
 from collections import defaultdict
-from transformers import T5Tokenizer, T5ForConditionalGeneration,Adafactor, T5Config
-try:
-    from .model_train.generate_dataclass import Generate_dataclass
-except:
-    from model_train.generate_dataclass import Generate_dataclass
-    
-
+from transformers import RobertaTokenizer, RobertaForMaskedLM, RobertaConfig
 
 all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
@@ -39,11 +34,12 @@ def parse_config():
     parser.add_argument('--data_path_prefix', type=str, help='The path where the data stores.')
     parser.add_argument('--init_label_path', type=str, help='The path where the data stores.')
     parser.add_argument('--seed', type=int ,default = 1, help='The path where the data stores.')
-    parser.add_argument('--aug_num', type=int ,default = 5, help='how many samples will make')
+    parser.add_argument('--topn', type=int ,default = 5, help='how many samples will make')
     parser.add_argument('--batch_size', type=int ,default = 10, help='batch_size for t5')
     parser.add_argument('--model_path', type=str ,default = 't5-base', help='batch_size for t5')
+    parser.add_argument('--change_rate', type=float ,default = 0.3, help='batch_size for t5')
     parser.add_argument('--save_path', type=str ,default = './save', help='batch_size for t5')
-    parser.add_argument('--number_of_gpu', type=int ,default = 2, help='batch_size for t5')
+    
     
     
     return parser.parse_args()
@@ -75,6 +71,9 @@ def get_overlap_position(input_ids, label_ids):
             continue
         overlap_index += [i for i, x in enumerate(input_ids) if x == label_value]
     return overlap_index
+
+
+
 def get_mask_arr(overlap_position, input_ids, start_token, end_token, change_rate):
     mask_arr = torch.zeros(input_ids.shape)
     for p in range(len(mask_arr)):
@@ -129,32 +128,59 @@ def tokenize(input_text,label, tokenizer, change_rate):
         tokenized_input.input_ids[0,mask_position] = mask_idx 
     return tokenized_input.input_ids[0].tolist()
 
+def get_will_change_item(raw_data, tokenizer, change_rate, topn, log):
+    tokenized_masked_list = []
+    dial_turn_id_list = []
+    for dial_idx, dial in enumerate(raw_data):
+        for turn in dial:
+            for n in range(topn):
+                dial_turn_key = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
+                text = turn['user']
+                label = turn['bspn']
+                tokenize_mask_text = tokenize(text, label,tokenizer, change_rate)
+                dial_turn_id_list.append(dial_turn_key)
+                tokenized_masked_list.append(tokenize_mask_text)
+    return dial_turn_id_list, tokenized_masked_list
 
-def generate_new_text(model, data, device,log, aug_num, number_of_gpu, batch_size_per_gpu, log_interval=None):
-    model.eval()
-    generate_dict = {}
-    gen_iterator = data.build_iterator(batch_size=number_of_gpu * batch_size_per_gpu, mode = "gen", aug_num =1) 
-    with torch.no_grad():
-        for idx, (gen_batch, key, label)in enumerate(gen_iterator):
-            if idx == 0:
-                dev_num = len(data.gen_data_list)
-                dev_batch_num_per_epoch = int(dev_num / (number_of_gpu * batch_size_per_gpu))+1
-            idx += 1
-            # if idx%50 == 0: log.info(f'{idx*100/dev_batch_num_per_epoch:.2f} %')
-            one_dev_input_batch, one_dev_output_batch = gen_batch
-            if len(one_dev_input_batch) == 0 or len(one_dev_output_batch) == 0: break
-            source_input, _, _, _ = \
-            data.parse_batch_tensor(gen_batch)
-            input_ids = source_input.to(device)
-            outputs = model.generate(input_ids = input_ids, num_return_sequences =aug_num ,num_beams = aug_num + 2)
-            label = [item for item in label for i in range(aug_num)]
-            key = [item.split("[a]")[0] + "[a]" + str(int(item.split("[a]")[-1]) + i) for item in key for i in range(aug_num)]
+
+def generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, batch_size, DEVICE,log, log_interval=None):
+    if not log_interval:
+        log_interval = 100
+    start = 0    
+    generated_dict = {}
+    count_dict = defaultdict(int) # default dict
+    while True:
+        if start %log_interval ==0:
+            log.info(f"generate new text {start}/{len(dial_turn_id_list)} done")
+        batch_id  = dial_turn_id_list[start:start+batch_size]
+        batch  = tokenized_masked_list[start:start+batch_size]
+        batch = tokenizer.pad({'input_ids' :batch})
+        batch = torch.tensor(batch.input_ids).to(DEVICE)
+        generated = model(batch)
+        generated = torch.argmax(generated.logits, dim = -1)
+
+        
+        for idx, masked, output in zip(batch_id, batch, generated):
+            end_position = (masked==2).nonzero().item()
+            decode_result = tokenizer.decode(output[1:end_position])
+            mask_text = tokenizer.decode(masked[1:end_position])
+            decode_result = "<sos_u> "+ decode_result.replace("</s>","") + " <eos_u>"
+            count_dict[idx] +=1
+            generated_dict[idx] = {'text' :decode_result, 'mask_text' : mask_text}
             
-            for k, output, bspn in zip(key, outputs, label):
-                text = data.tokenizer.decode(output,skip_special_tokens = True)
-                generate_dict[k] = {'text' : text, 'bspn' : bspn}
-                
-    return generate_dict
+        start += batch_size
+        
+        if start>= len(dial_turn_id_list):
+            break
+    return generated_dict
+
+def filtering_data(raw_data, filter_data):
+    data = []
+    for dial in raw_data:
+        dial_turn_key = '[d]'+ dial[0]['dial_id'] + '[t]0'
+        if dial_turn_key in filter_data:
+            data.append(dial)
+    return data
 
 def split_by_dial(raw_set):
     train_set = []
@@ -169,71 +195,61 @@ def split_by_dial(raw_set):
     return train_set, test_set
 
 
-## This is the most important!
-def get_generated_dict(raw_data, tokenizer, model, aug_num, device ,log, log_interval = None):
-    number_of_gpu = 1
-    batch_size_per_gpu = 10
-    data = Generate_dataclass(tokenizer, raw_data = raw_data, log = log, debugging = False, change_bspn=False)
+def filter_data(raw, filter):
+    new_data = []
+    for dial in raw:
+        dial_turn_key = '[d]'+dial[0]['dial_id'] + '[t]' + str(0)
+        if dial_turn_key in filter.keys():
+            new_data.append(dial)
+    return new_data
     
-    generated_dict= generate_new_text(model = model, data = data, 
-                                      device = device, log = log, 
-                                      aug_num = aug_num, number_of_gpu = number_of_gpu,
-                                      batch_size_per_gpu = batch_size_per_gpu,
-                                      log_interval = log_interval)
+def get_generated_dict(raw_data, init_labeled_data, tokenizer, model, change_rate, topn,  batch_size, device, log, log_interval):
+    raw_data = filter_data(raw_data, init_labeled_data)
+    
+    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, change_rate, topn,log)
+    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, batch_size, device, log, log_interval)
     return generated_dict
-    
-
-
-def load_model(model_path, device, multi_gpu_training):
-    t5_config = T5Config.from_pretrained(model_path)
-    model = T5ForConditionalGeneration.from_pretrained(model_path, config=t5_config, resume_download=True)
-    # if multi_gpu_training:
-    #     model = nn.DataParallel(model) # multi-gpu training
-    # else:
-    #     pass
-    model = model.to(device)
-    return model
-
-
 
 import argparse
 if __name__ == '__main__':
     log = log_setting()
     args = parse_config()
 
+    log.info('seed setting')
     seed_setting(args.seed)
-   
-    if torch.cuda.device_count() > 1:
-        multi_gpu_training = True
-    else:
-        multi_gpu_training = False
-            
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
-    model = load_model(args.model_path, device, multi_gpu_training)
-    tokenizer = T5Tokenizer.from_pretrained(args.model_path)
-    raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-tenpercent.json' # 전체 training data
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
+    
+    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+    config = RobertaConfig()
+    model = RobertaForMaskedLM.from_pretrained('roberta-base').to(DEVICE)
+
+    raw_datapath = args.data_path_prefix + 'multiwoz-fine-processed-train.json' # 전체 training data
+    raw_init_datapath = args.init_label_path + 'labeled_init.json' # 10% 사용할 때, 어떤 10%를 사용할 지 정보를 가지고 있는 파일
+    
+    with open(raw_init_datapath) as f:
+        init_labeled_data = json.load(f)
 
     with open(raw_datapath) as f:
         raw_data = json.load(f)
-    # get_generated_dict(raw_data, tokenizer, model, topn,  number_of_gpu, batch_size_per_gpu, device, log, log_interval = None):
-    generated_dict =get_generated_dict(raw_data, tokenizer, model, args.aug_num,\
-        device, log, log_interval = None)
+        
+    raw_data = filtering_data(raw_data, init_labeled_data)
+    dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, args.change_rate, args.topn,log)
+    generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, args.batch_size, DEVICE, log)
     raw_data_similar = []
+    
     for dial_idx, dial in enumerate(raw_data):
-        # if dial_idx%30 == 0 and dial_idx !=0:log.info(f'saving dials {dial_idx}/{len(sraw_data)} done')
-        for n in range(args.aug_num):
+        if dial_idx%30 == 0 and dial_idx !=0:log.info(f'saving dials {dial_idx}/{len(raw_data)} done')
+        for n in range(args.topn):
             similar_dial = []
             for turn in dial:
                 idx = '[d]'+ turn['dial_id'] + '[t]' + str(turn['turn_num']) + '[a]' + str(n)
                 similar_turn = copy.deepcopy(turn)
-                if idx in generated_dict:
-                    similar_turn['dial_id'] += f'_v{str(n)}'
-                    similar_turn['user'] = generated_dict[idx]['text']
-                    similar_turn['bspn'] = generated_dict[idx]['bspn']
-                    similar_dial.append(similar_turn)
-                else:
-                   similar_dial.append(similar_turn) 
+                similar_turn['dial_id'] += f'_v{str(n)}'
+                similar_turn['user'] = generated_dict[idx]['text']
+                similar_turn['mask'] = generated_dict[idx]['mask_text']
+                similar_dial.append(similar_turn)
             raw_data_similar.append(similar_dial)
+
     makedirs(f"./{args.save_path}")
 
 

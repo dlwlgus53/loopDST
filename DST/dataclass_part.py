@@ -209,8 +209,6 @@ class DSTMultiWozData:
                 dial_turn_key = '[d]'+dial[0]['dial_id'] + '[t]' + str(0)
                 if dial_turn_key not in filter.keys():
                     new_data.append(dial)
-                    
-                    
         return new_data
     
     def replace_label(self, raw, label):
@@ -246,6 +244,7 @@ class DSTMultiWozData:
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
             if mode == 'tagging' and dial_turn_key in self.labeled_data : continue
             if mode == 'train_loop' and dial_turn_key not in self.labeled_data : continue
+            
             if mode == 'train_aug':
                 dial_turn_key =  '[d]'+item['dial_id'].split("_")[0] + '[t]' + str(item['turn_num'])
                 if dial_turn_key not in self.labeled_data : continue
