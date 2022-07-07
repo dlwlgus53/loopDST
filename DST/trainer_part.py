@@ -76,7 +76,13 @@ def tagging(args,model,data,log, cuda_available, device):
             assert key not in labeled_data
             if random.random() > 0.5:
                 labeled_data[key] = value
-    
+                
+    elif args.selector == 'all':
+        qsize = confidence_que.qsize()
+        while confidence_que.empty() != True:
+            labeled_cnt +=1
+            key, value = confidence_que.get()[1]
+            labeled_data[key] = value
     else:
         log.info("wrong name in selector")
         

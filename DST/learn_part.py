@@ -68,7 +68,7 @@ def parse_config():
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     parser.add_argument("--aug_method", type=int, help="use augment or not")
-    parser.add_argument("--selector", type=str, default = 'topK', help="topK, topL, topS, leastK, ALL, Random")
+    parser.add_argument("--selector", type=str, default = 'topK', help="topK, topL, topS, leastK, all, random")
     
     
     parser.add_argument("--num_of_test", type=int, default = 3, help="use augment or not")
@@ -249,8 +249,13 @@ if __name__ == '__main__':
 
     log.info('Initialize dataclass')
     
+    if args.selector == 'all':
+        select_all = True
+    else:
+        select_all = False
+    
     data = DSTMultiWozData(args.model_name, tokenizer, args.data_path_prefix,  args.ckpt_save_path, init_label_path = args.init_label_path, \
-        log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, \
+        select_all =select_all, log_path = f'{args.ckpt_save_path}log.txt', shuffle_mode=args.shuffle_mode, \
           debugging = args.debugging)
     
     if args.epoch_num != 0:

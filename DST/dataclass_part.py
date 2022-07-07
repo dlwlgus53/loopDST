@@ -18,7 +18,7 @@ all_sos_token_list = ['<sos_b>', '<sos_a>', '<sos_r>']
 all_eos_token_list = ['<eos_b>', '<eos_a>', '<eos_r>']
 
 class DSTMultiWozData:
-    def __init__(self, model_name, tokenizer, data_path_prefix, ckpt_save_path, log_path, init_label_path, shuffle_mode='shuffle_session_level', 
+    def __init__(self, model_name, tokenizer, data_path_prefix, ckpt_save_path, log_path, init_label_path, select_all = False, shuffle_mode='shuffle_session_level', 
         debugging = False):
         self.log = self.log_setting(log_path)
         self.tokenizer = tokenizer
@@ -26,6 +26,7 @@ class DSTMultiWozData:
         self.pad_token_id = self.tokenizer.convert_tokens_to_ids(['<_PAD_>'])[0]
         self.sos_context_token_id = self.tokenizer.convert_tokens_to_ids(['<sos_context>'])[0]
         self.eos_context_token_id = self.tokenizer.convert_tokens_to_ids(['<eos_context>'])[0]
+        self.select_all = select_all
 
         # initialize bos_token_id, eos_token_id
         self.model_name = model_name
@@ -242,9 +243,8 @@ class DSTMultiWozData:
         all_input_data_list, all_output_data_list, all_index_list = [], [], []
         for item in all_data_list:  
             dial_turn_key = '[d]'+item['dial_id'] + '[t]' + str(item['turn_num'])
-            if mode == 'tagging' and dial_turn_key in self.labeled_data : continue
+            if mode == 'tagging' and dial_turn_key in self.labeled_data and self.select_all == False: continue
             if mode == 'train_loop' and dial_turn_key not in self.labeled_data : continue
-            
             if mode == 'train_aug':
                 dial_turn_key =  '[d]'+item['dial_id'].split("_")[0] + '[t]' + str(item['turn_num'])
                 if dial_turn_key not in self.labeled_data : continue
