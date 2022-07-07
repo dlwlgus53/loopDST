@@ -205,7 +205,6 @@ def filter_data(raw, filter):
     
 def get_generated_dict(raw_data, init_labeled_data, tokenizer, model, change_rate, topn,  batch_size, device, log, log_interval):
     raw_data = filter_data(raw_data, init_labeled_data)
-    
     dial_turn_id_list, tokenized_masked_list = get_will_change_item(raw_data, tokenizer, change_rate, topn,log)
     generated_dict= generate_new_text(model, tokenizer, dial_turn_id_list, tokenized_masked_list, batch_size, device, log, log_interval)
     return generated_dict

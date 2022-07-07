@@ -29,6 +29,9 @@ class Aug_training:
         if aug_method ==7:
             from data_augment7.augment import log_setting, get_generated_dict
             
+        if aug_method ==16:
+            from data_augment16.augment import log_setting, get_generated_dict
+            
         log_setting("aug_log")
         DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
         self.aug_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
@@ -43,7 +46,7 @@ class Aug_training:
         self.batch_size = batch_size
         self.log_interval = log_interval
         self.use_dev_aug= use_dev_aug
-    
+        self.aug_method = aug_method
     def _makedirs(self, path): 
         try: 
             os.makedirs(path) 
@@ -54,8 +57,12 @@ class Aug_training:
     def augment(self):
         
         raw_data = self.data.replace_label(self.data.train_raw_data, self.data.labeled_data)
-        generated_dict = self.get_generated_dict(raw_data, self.aug_tokenizer, self.aug_model, self.change_rate, \
+        if self.aug_method == 16:
+            generated_dict = self.get_generated_dict(raw_data, self.data.init_labeled_data, self.aug_tokenizer, self.aug_model, self.change_rate, \
             self.aug_num, self.batch_size, self.device, self.log,self.log_interval)
+        else:
+            generated_dict = self.get_generated_dict(raw_data, self.aug_tokenizer, self.aug_model, self.change_rate, \
+                self.aug_num, self.batch_size, self.device, self.log,self.log_interval)
         
         
         raw_data_similar = []

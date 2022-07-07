@@ -135,8 +135,11 @@ def evaluate(args,model,data,log, cuda_available, device, mode ):
         all_dev_result = zip_result(all_dev_result)
         dev_score = compute_jacc(data=all_dev_result) * 100
         sacc_score = compute_sacc(data=all_dev_result) * 100
-    
-    return all_dev_result, dev_score, sacc_score
+        
+    if mode == 'test':
+        return all_dev_result, dev_score, sacc_score
+    else:
+        return all_dev_result, dev_score
 
 
 def zip_result(prediction):

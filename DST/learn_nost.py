@@ -275,12 +275,11 @@ if __name__ == '__main__':
     for epoch in range(args.epoch_num):
         log.info(f'------------------------------Epoch {epoch}--------------------------------------')
         log_sentence.append(f"Epoch {epoch}")
-        log.info(f"Epoch {epoch} Tagging start")
         ####################### tagging ################################
-        tagging(args,model,data,log, cuda_available, device)
+        # tagging(args,model,data,log, cuda_available, device)
         ##################### training #################################
         log.info("load student model")
-        student= load_model(args, data, cuda_available, load_pretrained = False)
+        student=load_model(args, data, cuda_available, load_pretrained = False)
         optimizer, scheduler = load_optimizer(student, args) # 이거 바꿨음.. 새걸로
         if args.aug_method:
             log.info("aug data training")

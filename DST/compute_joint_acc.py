@@ -9,12 +9,12 @@ import argparse
 slot_info = {
     "taxi": ["leave", "destination", "departure", "arrive"],
     "police": [],
+    "hospital": ["department"],
     "hotel": ["type", "parking", "pricerange", "internet", "stay", "day", "people", "area", "stars", "name"],
     "attraction": ["area", "type", "name"],
     "train": ["destination", "day", "arrive", "departure", "people", "leave"],
     "restaurant": ["food", "pricerange", "area", "name", "time", "day", "people"]
 }
-
 
 def get_domain_slot(bspn):
     answer = ''
