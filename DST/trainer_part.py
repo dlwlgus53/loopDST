@@ -47,25 +47,40 @@ def tagging(args,model,data,log, cuda_available, device):
                 src_mask = tagging_batch_src_mask.to(device)
             tagging_batch_parse_dict, confidence_list = model.module.tagging(src_input, src_mask)   
             for predict_result,dial_turn_key, confidence in zip(tagging_batch_parse_dict, dial_turn_key_batch, confidence_list):
-                confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
-    
+                if args.selector == 'leastK':
+                    confidence_que.put((confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
+                else:
+                    confidence_que.put((-confidence, (dial_turn_key , '<sos_b> ' + predict_result + ' <eos_b>')))
+                        
     labeled_cnt =0
     
     prev_labeled_data_len = len(data.labeled_data)
     labeled_data = data.labeled_data
+    # parser.add_argument("--selector", type=str, default = 'topK', help="topK, topL, topS, leastK, all, random")/
     
-    qsize = confidence_que.qsize()
-    while confidence_que.empty() != True:
-        labeled_cnt +=1
-        key, value = confidence_que.get()[1]
-        assert key not in labeled_data
-        labeled_data[key] = value
-        if labeled_cnt>qsize*args.confidence_percent:
-            break
-    # init_labeled_data = data.get_init_data()
-    # labeled_data = merge_two_dicts(labeled_data, init_labeled_data)
+    if args.selector in ['leastK', 'topK']:
+        qsize = confidence_que.qsize()
+        while confidence_que.empty() != True:
+            labeled_cnt +=1
+            key, value = confidence_que.get()[1]
+            assert key not in labeled_data
+            labeled_data[key] = value
+            if labeled_cnt>qsize*args.confidence_percent:
+                break
+    
+    elif args.selector == 'random':
+        qsize = confidence_que.qsize()
+        while confidence_que.empty() != True:
+            labeled_cnt +=1
+            key, value = confidence_que.get()[1]
+            assert key not in labeled_data
+            if random.random() > 0.5:
+                labeled_data[key] = value
+    
+    else:
+        log.info("wrong name in selector")
+        
     data.update_labeled_data(labeled_data)
-    
     log.info(f"prior labeld data: {prev_labeled_data_len} unlabeld data: {tagging_data_num - prev_labeled_data_len} saving :{labeled_cnt}")
     log.info(f"updated labeled data: {len(data.labeled_data)}")
     

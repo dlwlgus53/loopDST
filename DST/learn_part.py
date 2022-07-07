@@ -68,11 +68,14 @@ def parse_config():
     parser.add_argument("--debugging", type=int, default=0, help="debugging going small")
     parser.add_argument("--log_interval", type=int, default=1000, help="mini epoch")
     parser.add_argument("--aug_method", type=int, help="use augment or not")
+    parser.add_argument("--selector", type=str, default = 'topK', help="topK, topL, topS, leastK, ALL, Random")
+    
     
     parser.add_argument("--num_of_test", type=int, default = 3, help="use augment or not")
     
     parser.add_argument("--patient", type=int, default = 3, help="use augment or not")
     parser.add_argument("--use_dev_aug", type=int, default = 1, help="use augment or not")
+    
     return parser.parse_args()
 
 def get_optimizers(model, args):
